@@ -1,7 +1,7 @@
 /* Service worker: tiene in memoria i file dell'app, così si apre anche senza rete.
    IMPORTANTE: a ogni pubblicazione su GitHub aumenta il numero di VERSIONE,
    altrimenti i telefoni continuano a usare i file vecchi. */
-const VERSIONE = "spese-v6";
+const VERSIONE = "spese-v7";
 const FILE = [
   "./", "index.html", "style.css", "manifest.webmanifest",
   "js/calcoli.js", "js/dati.js", "js/app.js", "lib/chart.umd.min.js",

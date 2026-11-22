@@ -21,12 +21,17 @@ function render() {
   document.querySelectorAll("#nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === UI.tab));
   const ttl = { ins: "Le mie spese", mov: "Movimenti", mese: "Analisi del mese", anno: "Analisi dell'anno", altro: "Altro" }[UI.tab];
   document.getElementById("ttl").textContent = ttl;
-  if (UI.tab === "ins") v.innerHTML = viewIns();
-  else if (UI.tab === "mov") v.innerHTML = viewMov();
-  else if (UI.tab === "mese") v.innerHTML = viewMese();
-  else if (UI.tab === "anno") v.innerHTML = viewAnno();
-  else v.innerHTML = viewAltro();
-  afterRender();
+  // Se una schermata si blocca, invece di non fare niente mostra l'errore (da comunicare a chi mantiene l'app)
+  try {
+    if (UI.tab === "ins") v.innerHTML = viewIns();
+    else if (UI.tab === "mov") v.innerHTML = viewMov();
+    else if (UI.tab === "mese") v.innerHTML = viewMese();
+    else if (UI.tab === "anno") v.innerHTML = viewAnno();
+    else v.innerHTML = viewAltro();
+    afterRender();
+  } catch (e) {
+    v.innerHTML = `<section class="banner warn"><b>Questa schermata non si è aperta per un errore.</b><div class="small">Versione ${VERSIONE_APP}. Errore: ${esc(e && e.message ? e.message : String(e))}</div><div class="tiny" style="overflow-wrap:anywhere">${esc(String(e && e.stack || "").split("\n").slice(0, 3).join(" · "))}</div><div class="small">Le altre schermate funzionano: puoi tornare indietro con la barra in basso.</div></section>`;
+  }
 }
 
 /* ===== Modulo di inserimento (usato anche per modificare) ===== */
@@ -559,7 +564,7 @@ function viewAltro() {
   const s = UI.altro;
   if (!s) return annoHTML() + `<div class="menu">
     ${[["obj", "Obiettivi di spesa", "Tetto mensile per categoria"], ["smist", "Smistamento", "Percentuali sui conti"], ["ric", "Spese ricorrenti", "Abbonamenti, assicurazioni"], ["tax", "Imposte e contributi", "Accantonamenti e versamenti"], ["pat", "Patrimonio", "Inizio e fine anno, indici"], ["cred", "Crediti e debiti", "Chi ti deve e chi devi"], ["carb", "Carburante", "Prezzo al litro, km al litro"], ["cat", "Categorie", "Aggiungi, rinomina, colori"], ["dati", "Impostazioni e dati", "Lordo o netto, collegamento"]].map(x => `<button data-act="sub" data-v="${x[0]}"><b>${x[1]}</b><span>${x[2]}</span></button>`).join("")}
-  </div>`;
+  </div><div class="tiny muted" style="text-align:center">Versione dell&#39;app: ${VERSIONE_APP}</div>`;
   const back = `<button class="ghost" data-act="sub" data-v="" style="align-self:flex-start">‹ Altro</button>`;
   return back + ({ obj: subObj, smist: subSmist, ric: subRic, tax: subTax, pat: subPat, cred: subCred, carb: subCarb, cat: subCat, dati: subDati }[s])();
 }

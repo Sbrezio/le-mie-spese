@@ -44,7 +44,7 @@ node test/schermate.test.js               # apre tutte le schermate e controlla 
 ## Pubblicare un aggiornamento
 
 1. Modifica i file.
-2. In `sw.js` aumenta il numero in `VERSIONE` (es. `spese-v2` → `spese-v3`).
+2. In `sw.js` aumenta il numero in `VERSIONE` (es. `spese-v7` → `spese-v8`) e metti lo stesso numero in `VERSIONE_APP` di `js/dati.js`.
 3. Salva su GitHub (commit e push): GitHub Pages pubblica da solo in un paio di minuti.
 4. Sui dispositivi compare "Nuova versione disponibile: tocca per aggiornare".
 
