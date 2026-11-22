@@ -476,7 +476,6 @@ function viewAnno() {
       <label class="chk det" for="pI"><input type="checkbox" id="pI" data-act="tI" ${UI.tI ? "checked" : ""}>Togli gli investimenti</label>
       <span class="det">${lordo ? "Entrate lorde − imposte accantonate" : "Entrate nette"} − spese${UI.tS ? " − straordinarie" : ""}${UI.tI ? " − investimenti" : ""}</span></div>
   </div>
-  ${B ? avanzoHTML(y, mo, B) : ""}
   <label class="chk card" style="flex-direction:row" for="inclS"><input type="checkbox" id="inclS" data-act="inclS" ${inclS ? "checked" : ""}>Includi le spese straordinarie in obiettivi e grafici</label>
   <section class="card"><h2>Entrate e spese mese per mese ${legBtn(`Entrate nette = lorde meno il ${Math.round(tp * 100)}% accantonato per imposte sulle sole entrate tassate (stipendio fisso ed extra lavoro tassato). Quota spese prevista = soldi destinati alle spese di ogni mese, senza i mesi precedenti: se le barre gialle e rosse la superano, quel mese hai sforato.`)}</h2>
     <div class="row" style="gap:6px 16px">

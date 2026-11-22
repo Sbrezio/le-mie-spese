@@ -38,6 +38,7 @@ Serve Node.js. Dalla cartella del progetto:
 node strumenti/server-locale.js           # app su http://localhost:8080, collegabile al ponte vero
 node strumenti/server-locale.js --finto   # in più un ponte finto con dati di esempio
 node test/calcoli.test.js                 # test dei calcoli (serve il prototipo, che non è pubblicato)
+node test/schermate.test.js               # apre tutte le schermate e controlla che nessuna si blocchi
 ```
 
 ## Pubblicare un aggiornamento
