@@ -114,6 +114,8 @@ function impNum(k) { const v = parseNum(S.imp[k]); return isNaN(v) ? null : v; }
 /* Ogni anno riparte da zero: bilancio di partenza di gennaio e imposte già accantonate si scrivono a mano (di partenza 0) */
 function ripAnno(y) { return impNum("riporto_iniziale_" + y) || 0; }
 function taxIni(y) { return impNum("imposte_accantonate_inizio_" + y) || 0; }
+/* Saldo del conto dove finiscono gli avanzi (es. prepagata) a inizio anno: non tocca il budget, serve solo a sapere quanto dovrebbe esserci */
+function prepIni(y) { return impNum("prepagata_inizio_" + y) || 0; }
 /* Patrimonio di un anno: voci e obiettivo */
 function patFor(y) { return { anno: y, obiettivo: impNum("obiettivo_patrimonio_" + y) || 0, voci: S.patRows.filter(v => +v.anno === +y) }; }
 
@@ -193,6 +195,7 @@ function firstYear() { return Math.min.apply(null, years()); }
 function budgetYear(y) {
   const k = "b" + y; if (CACHE[k]) return CACHE[k];
   let rip = ripAnno(y); // ogni anno riparte dal suo bilancio di partenza (di solito 0)
+  let prep = prepIni(y); // saldo previsto della prepagata: inizio anno + avanzi (meno gli sforamenti) mese per mese
   const now = new Date(); const res = [];
   for (let mo = 1; mo <= 12; mo++) {
     const fut = y > now.getFullYear() || (y === now.getFullYear() && mo > now.getMonth() + 1);
@@ -212,7 +215,8 @@ function budgetYear(y) {
     // Imposte da accantonare: solo sulle entrate tassate (stipendio del mese + extra tassati del mese prima)
     const accTax = (isTassata("stip") ? A.stip : 0) * tp + prev.entExtraTax * tp;
     // avanzo = quanto resta sul conto spese a fine mese (quota del mese meno spese del mese): va spostato sul conto degli avanzi
-    res.push({ mo, base, qExtra, mese, rip, disp, spese: A.spese, saldo, avanzo: mese - A.spese, personalizzato: smistPersonalizzato(y, mo), extraPrev: prev.entExtra, accTax, versTax: A.tax });
+    prep += mese - A.spese;
+    res.push({ mo, base, qExtra, mese, rip, disp, spese: A.spese, saldo, avanzo: mese - A.spese, prep, personalizzato: smistPersonalizzato(y, mo), extraPrev: prev.entExtra, accTax, versTax: A.tax });
     rip = saldo;
   }
   CACHE[k] = res; return res;

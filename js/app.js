@@ -502,8 +502,8 @@ function viewAnno() {
     </section>
   <section class="card"><h2>Budget mese per mese ${legBtn(`La barra confronta le spese necessarie, extra e senza categoria dell'anno con la somma delle quote di stipendio ed entrate extra destinate alle spese di ogni mese (senza riporto iniziale). La linea indica dove dovresti essere oggi. Colori: verde sotto il ritmo, giallo in linea, arancione al limite, rosso sopra, nero oltre il 120% del ritmo.`)}</h2>
     ${yearQuotaHTML(y, false)}
-    <div class="tblwrap"><table><thead><tr><th>Mese</th><th class="n">Quota spese del mese</th><th class="n">Bilancio mesi precedenti</th><th class="n">Bilancio compreso mese corrente</th><th class="n">Spese del mese</th><th class="n">Bilancio fine mese</th><th class="n">Avanzo → ${esc(nomeAvanzi())}</th></tr></thead><tbody>
-    ${B.map((b, i) => b ? `<tr><td>${MESI[i]}</td><td class="n">${eur(b.mese)}</td><td class="n ${sgn(b.rip)}">${eur(b.rip)}</td><td class="n ${sgn(b.disp)}">${eur(b.disp)}</td><td class="n">${eur(b.spese)}</td><td class="n ${sgn(b.saldo)}">${eur(b.saldo)}</td><td class="n ${sgn(b.avanzo)}">${eur(b.avanzo)}</td></tr>` : "").join("")}
+    <div class="tblwrap"><table><thead><tr><th>Mese</th><th class="n">Quota spese del mese</th><th class="n">Bilancio mesi precedenti</th><th class="n">Bilancio compreso mese corrente</th><th class="n">Spese del mese</th><th class="n">Bilancio fine mese</th><th class="n">Avanzo del mese</th><th class="n">${esc(nomeAvanzi())} prevista</th></tr></thead><tbody>
+    ${B.map((b, i) => b ? `<tr><td>${MESI[i]}</td><td class="n">${eur(b.mese)}</td><td class="n ${sgn(b.rip)}">${eur(b.rip)}</td><td class="n ${sgn(b.disp)}">${eur(b.disp)}</td><td class="n">${eur(b.spese)}</td><td class="n ${sgn(b.saldo)}">${eur(b.saldo)}</td><td class="n ${sgn(b.avanzo)}">${eur(b.avanzo)}</td><td class="n ${sgn(b.prep)}">${eur(b.prep)}</td></tr>` : "").join("")}
   </tbody></table></div></section>
   ${lordo ? `<section class="card"><div class="row between"><h2>Imposte e contributi</h2><button class="ghost" data-act="sub2" data-v="tax">Dettaglio</button></div>
     <div class="kv"><span>Già accantonato a inizio anno</span><b>${eur0(taxIni(y))}</b><span>Accantonato nell'anno</span><b>${eur0(fondo.acc)}</b><span>Versato nell'anno</span><b>${eur0(fondo.vers)}</b><span>Fondo imposte oggi</span><b>${eur0(fondo.saldo)}</b></div></section>` : ""}
@@ -622,6 +622,7 @@ function subSmist() {
     <div class="row between"><b class="${sum === 100 ? "pos" : "neg"}">Totale ${String(sum).replace(".", ",")}%</b><button data-act="accadd">+ Aggiungi conto</button></div>
     <label for="ripIni">Bilancio di partenza di gennaio ${UI.y} (ogni anno riparte da qui; di solito 0)<input id="ripIni" inputmode="decimal" value="${ripAnno(UI.y)}" data-k="ripIni"></label>
     <label for="nomeAv">Dove sposti a fine mese quello che avanza sul conto spese<input id="nomeAv" value="${esc(nomeAvanzi())}" data-k="nomeAv" placeholder="es. Prepagata"></label>
+    <label for="prepIni">Saldo di ${esc(nomeAvanzi())} a inizio ${UI.y} (non cambia il budget: serve a calcolare il saldo previsto)<input id="prepIni" inputmode="decimal" value="${prepIni(UI.y)}" data-k="prepIni"></label>
   </section>
   ${vers.length || pers.length ? `<section class="card"><h2>Storico delle percentuali</h2>
     ${vers.length ? `<div class="list">${vers.map(v => `<div class="item" style="cursor:default"><div class="t">Da ${nomeYm(v)}</div><div class="m">${descSmist(parseSmist(S.imp["smist_dal_" + v]))}</div></div>`).join("")}</div>` : ""}
@@ -641,11 +642,11 @@ function subSmist() {
 /* ===== Avanzo del conto spese a fine mese ===== */
 function avanzoHTML(y, mo, B) {
   const now = new Date(); const inCorso = y === now.getFullYear() && mo === now.getMonth() + 1; const nome = esc(nomeAvanzi());
-  return `<section class="card"><h2>Fine mese: avanzo del conto spese ${legBtn(`Ogni fine mese quello che resta sul conto spese (quota del mese meno spese del mese) va spostato su ${nome}, così il conto spese riparte da zero. Restano comunque soldi per le spese: il bilancio passa al mese dopo. Se hai speso più della quota, la differenza la prendi da ${nome}. Il bilancio di fine mese dovrebbe corrispondere a quello che c'è su ${nome}.`)}</h2>
+  return `<section class="card"><h2>Fine mese: avanzo del conto spese ${legBtn(`Ogni fine mese quello che resta sul conto spese (quota del mese meno spese del mese) va spostato su ${nome}, così il conto spese riparte da zero. Restano comunque soldi per le spese: il bilancio passa al mese dopo. Se hai speso più della quota, la differenza la prendi da ${nome}. Il saldo previsto parte da quello di inizio anno (Altro, Smistamento) e somma gli avanzi di ogni mese, togliendo gli sforamenti: confrontalo con il saldo vero della carta.`)}</h2>
     <div class="kv">
       <span>${inCorso ? "Rimasto finora" : "Rimasto"} sul conto spese (quota − spese del mese)</span><b class="${sgn(B.avanzo)}">${eur(B.avanzo)}</b>
       <span><b>${B.avanzo >= 0 ? "Da spostare su " + nome : "Da prendere da " + nome + " per coprire"}</b></span><b>${eur(Math.abs(B.avanzo))}</b>
-      <span>Bilancio di fine mese (dovrebbe esserci su ${nome})</span><b class="${sgn(B.saldo)}">${eur(B.saldo)}</b>
+      <span>Saldo previsto su ${nome} ${inCorso ? "oggi" : "a fine mese"} (dopo lo spostamento)</span><b class="${sgn(B.prep)}">${eur(B.prep)}</b>
     </div>
     ${inCorso ? `<div class="small muted">Mese in corso: il numero definitivo lo vedi a fine mese.</div>` : ""}
   </section>`;
@@ -691,12 +692,13 @@ function copiaPatrimonio(y) {
 }
 function creaAnno() {
   const n = Math.max(...anniDisponibili()) + 1; const p = n - 1;
-  confirmBox(`Creo il ${n}? Copio dal ${p} le percentuali di smistamento e gli obiettivi di spesa (poi li puoi cambiare), creo le voci del patrimonio partendo dai valori di fine ${p}, e metto a 0 il bilancio di partenza e le imposte già accantonate. Il ${n} diventa l'anno da analizzare.`, "Crea il " + n, () => {
+  confirmBox(`Creo il ${n}? Copio dal ${p} le percentuali di smistamento e gli obiettivi di spesa (poi li puoi cambiare), creo le voci del patrimonio partendo dai valori di fine ${p}, metto a 0 il bilancio di partenza e le imposte già accantonate, e il saldo previsto di ${esc(nomeAvanzi())} a fine ${p} diventa quello di inizio ${n}. Il ${n} diventa l'anno da analizzare.`, "Crea il " + n, () => {
     if (!versioniSmist().length) S.imp["smist_dal_" + firstYear() + "-01"] = serSmist(smistConti());
     if (!S.imp["smist_dal_" + n + "-01"]) S.imp["smist_dal_" + n + "-01"] = serSmist(smistStd(p + "-12"));
     if (!S.imp["obiettivi_" + n]) S.imp["obiettivi_" + n] = serObj(objFor(p));
     if (S.imp["riporto_iniziale_" + n] == null) S.imp["riporto_iniziale_" + n] = "0";
     if (S.imp["imposte_accantonate_inizio_" + n] == null) S.imp["imposte_accantonate_inizio_" + n] = "0";
+    if (S.imp["prepagata_inizio_" + n] == null) { const bp = budgetYear(p).filter(Boolean).pop(); S.imp["prepagata_inizio_" + n] = String(r2(bp ? bp.prep : prepIni(p))); }
     copiaPatrimonio(n);
     S.imp.anno_predefinito = String(n); UI.y = n; UI.mo = 1;
     persist(); render(); toast("Creato il " + n);
@@ -992,6 +994,7 @@ document.getElementById("view").addEventListener("change", e => {
     persist(); const sy = window.scrollY; render(); window.scrollTo(0, sy); return;
   }
   if (el.dataset.tax) { const set = new Set(tassate()); if (el.checked) set.add(el.dataset.tax); else set.delete(el.dataset.tax); S.imp.categorie_tassate = [...set].join(","); persist(); render(); toast("Imposte ricalcolate"); return; }
+  if (el.dataset.k === "prepIni") { const v = parseNum(el.value); S.imp["prepagata_inizio_" + UI.y] = String(isNaN(v) ? 0 : r2(v)); persist(); render(); return; }
   if (el.dataset.k === "nomeAv") { S.imp.nome_conto_avanzi = el.value.trim(); persist(); render(); return; }
   if (el.dataset.k === "lordo") { S.imp.mostra_lordo = el.value === "1" ? "SI" : "NO"; persist(); render(); return; }
   if (el.dataset.k === "annoPred") { S.imp.anno_predefinito = String(el.value); UI.y = +el.value; persist(); render(); toast("Anno da analizzare: " + el.value); return; }

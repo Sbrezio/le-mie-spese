@@ -218,6 +218,11 @@ ok(vicino(A("monthAgg(2026, 10).taxAcc"), A("monthAgg(2026, 10).entTax") * 0.2) 
 const b5 = JSON.parse(A("JSON.stringify(budgetYear(2026)[4])"));
 ok(vicino(b5.avanzo, b5.mese - b5.spese), "avanzo del mese = quota del mese meno spese del mese");
 ok(vicino(A("budgetYear(2026)[5].rip"), b5.saldo), "il bilancio passa comunque al mese dopo");
+A(`S.imp.prepagata_inizio_2026 = "1000"; invalidate();`);
+const bb = JSON.parse(A("JSON.stringify(budgetYear(2026))")).filter(Boolean);
+ok(vicino(bb[0].prep, 1000 + bb[0].avanzo) && vicino(bb[1].prep, 1000 + bb[0].avanzo + bb[1].avanzo), "prepagata prevista: 1.000€ + avanzo di gennaio, poi + avanzo di febbraio");
+ok(vicino(bb[bb.length - 1].prep, 1000 + bb.reduce((s, b) => s + b.avanzo, 0)), "prepagata prevista a fine periodo = 1.000€ + somma degli avanzi");
+ok(vicino(bb[0].saldo, A("budgetYear(2026)[0].saldo")) && vicino(A("budgetYear(2026)[0].rip"), 0), "i 1.000€ della prepagata non cambiano il budget");
 // obiettivi per anno
 A(`S = JSON.parse(JSON.stringify(__stato)); invalidate(); S.imp.obiettivi_2027 = serObj(Object.assign(objFor(2026), { risto: 999 }));`);
 ok(A("objFor(2027).risto") === 999 && A("objFor(2026).risto") === stato.obj.risto, "obiettivi: il 2027 ha i suoi, il 2026 resta com'era");
