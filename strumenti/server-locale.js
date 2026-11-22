@@ -56,7 +56,12 @@ function ponte(req) {
     for (const id of d.elimina || []) { const i = DB.movimenti.findIndex(x => x.id === id); if (i >= 0) { DB.movimenti.splice(i, 1); out.eliminati++; } }
     return out;
   }
-  if (action === "aggiungiMovimento") { if (!DB.movimenti.some(x => x.id === d.id)) DB.movimenti.push(d); return { ok: true }; }
+  if (action === "categoriePerWidget") {
+    const uso = {}; DB.movimenti.forEach(m => { if (m.categoria) uso[m.categoria] = (uso[m.categoria] || 0) + 1; });
+    const cs = DB.categorie.filter(c => c.attiva !== "NO" && c.gruppo !== "esc").sort((x, y) => (uso[y.id] || 0) - (uso[x.id] || 0));
+    return { ok: true, categorie: cs.map(c => ({ id: c.id, etichetta: c.emoji + " " + c.nome })), elenco: cs.map(c => c.emoji + " " + c.nome) };
+  }
+  if (action === "aggiungiMovimento") { if (!(+d.importo > 0)) return { ok: false, errore: "Importo non valido" }; if (!DB.movimenti.some(x => x.id === d.id)) DB.movimenti.push(Object.assign({ da_verificare: d.categoria ? "" : "SI" }, d)); return { ok: true, messaggio: "Spesa salvata: " + String(Number(d.importo).toFixed(2)).replace(".", ",") + "€ " + d.descrizione }; }
   const schede = { salvaCategorie: "categorie", salvaConti: "conti", salvaRicorrenti: "ricorrenti", salvaCrediti: "crediti", salvaPatrimonio: "patrimonio", salvaKm: "km" };
   if (schede[action]) { DB[schede[action]] = d; return { ok: true, righe: d.length }; }
   if (action === "salvaImpostazioni") { Object.assign(DB.impostazioni, d); return { ok: true }; }
