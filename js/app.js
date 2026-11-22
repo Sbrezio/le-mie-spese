@@ -17,6 +17,7 @@ function render() {
   if (!leggiCfg()) { nav.hidden = true; document.getElementById("ttl").textContent = "Le mie spese"; v.innerHTML = viewCollega(); return; }
   if (!S) { nav.hidden = true; v.innerHTML = `<section class="card"><h2>Caricamento dei dati...</h2><div class="small muted">Sto leggendo il tuo Google Foglio. La prima volta può volerci qualche secondo.</div><div id="loadErr" class="small neg"></div></section>`; return; }
   nav.hidden = false;
+  if (S.objAnno !== UI.y) { S.obj = objFor(UI.y); S.objAnno = UI.y; } // obiettivi dell'anno che si sta guardando
   document.querySelectorAll("#nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === UI.tab));
   const ttl = { ins: "Le mie spese", mov: "Movimenti", mese: "Analisi del mese", anno: "Analisi dell'anno", altro: "Altro" }[UI.tab];
   document.getElementById("ttl").textContent = ttl;
@@ -284,7 +285,7 @@ function viewMese() {
   if (B) {
     const st = statoRitmo(B.spese, B.mese, frac); const pM = B.mese > 0 ? B.spese / B.mese * 100 : 100;
     budget = `
-      <div class="row between"><h2>Quota spese del mese ${legBtn(`${spendAcc().p}% dello stipendio fisso (${eur(B.base)}) + ${spendAcc().p}% delle entrate extra di ${MESI[(mo + 10) % 12]} (${eur(B.qExtra)}). Non tiene conto dei mesi precedenti.`)}</h2><span class="pill" style="background:${st.c}">${Math.round(pM)}% del mese</span></div>
+      <div class="row between"><h2>Quota spese del mese ${legBtn(`${spendAcc(y, mo).p}% dello stipendio fisso (${eur(B.base)}) + ${spendAcc(y, mo).p}% delle entrate extra di ${MESI[(mo + 10) % 12]} (${eur(B.qExtra)}). Non tiene conto dei mesi precedenti.`)}</h2><span class="pill" style="background:${st.c}">${Math.round(pM)}% del mese</span></div>
       <div class="kv"><span>Quota spese mese ${MESI[mo - 1]}</span><b>${eur(B.mese)}</b><span>Spese ${MESI[mo - 1]}</span><b>${eur(B.spese)}</b><span>${B.mese - B.spese >= 0 ? "Restano" : "Sforamento del mese"}</span><b class="${sgn(B.mese - B.spese)}">${eur(B.mese - B.spese)}</b></div>
       ${barCol(pM, st.c, tick, 14)}
       `;
@@ -295,6 +296,7 @@ function viewMese() {
   ${B ? `<section class="card"><h2>Con il saldo dei mesi precedenti ${legBtn(`Il bilancio di fine mese passa al mese dopo: se è positivo si somma, se è negativo si scala.`)}</h2>
     <div class="kv"><span>Quota spese mese ${MESI[mo - 1]}</span><b>${eur(B.mese)}</b><span>Bilancio mesi precedenti</span><b class="${sgn(B.rip)}">${eur(B.rip)}</b><span>Bilancio compreso mese corrente</span><b class="${sgn(B.disp)}">${eur(B.disp)}</b><span>Spese ${MESI[mo - 1]}</span><b>${eur(B.spese)}</b><span>Bilancio fine mese</span><b class="${sgn(B.saldo)}">${eur(B.saldo)}</b></div>
     </section>` : ""}
+  ${B ? avanzoHTML(y, mo, B) : ""}
   <label class="chk card" style="flex-direction:row" for="inclS"><input type="checkbox" id="inclS" data-act="inclS" ${inclS ? "checked" : ""}>Includi le spese straordinarie in obiettivi e grafici${A.straord ? ` (questo mese ${eur(A.straord)})` : ""}</label>
   <section class="card"><h2>Dove sono finiti i soldi e obiettivi ${legBtn(`Barra = quanto hai speso nel mese e quota sul totale delle spese. A destra = quanto hai usato dell'obiettivo mensile, con i colori verde, giallo, arancione, rosso e nero${tick != null ? "; la linea indica il punto del mese" : ""}. Tocca una categoria per vedere le spese.`)}</h2>
     <div class="stack" style="gap:0">${totV > 0 ? mergedRows(A, y, inclS, tick, totV, mo) : `<div class="muted small">Nessuna spesa in questo mese.</div>`}</div>
@@ -362,8 +364,8 @@ function genTable(cols, opt) {
   }
   // imposte (solo con lordo)
   if (lordo) {
-    const accV = cols.map((A, i) => v(i, A.entTax * tp));
-    h += grpRow("tax", gname("tax") + " (accantonate " + Math.round(tp * 100) + "% sulle entrate tassate)", "gtax", accV);
+    const accV = cols.map((A, i) => v(i, A.taxAcc));
+    h += grpRow("tax", gname("tax") + " (accantonate sulle entrate tassate)", "gtax", accV);
     if (UI.open.tax) {
       h += `<tr class="sub"><td class="sticky">Accantonate sulle entrate</td>${cell(accV)}${oc("")}</tr>`;
       h += `<tr class="sub info click" data-act="catdet" data-c="tasse" data-y="${opt.y}" data-mo="${dmo}"><td class="sticky">Versate nel periodo (informativo)</td>${cell(cols.map((A, i) => v(i, A.tax)))}${oc("")}</tr>`;
@@ -375,10 +377,10 @@ function genTable(cols, opt) {
   // entrate
   const k = lordo ? 1 : (1 - tp);
   // Entrate nette: le entrate tassate perdono la percentuale delle imposte, le altre restano intere
-  const kc = c => lordo || !isTassata(c) ? 1 : (1 - tp);
-  const entV = cols.map((A, i) => v(i, lordo ? A.ent : A.ent - A.entTax * tp));
+  const netCat = (A, c) => A.months ? A.months.reduce((s, M) => s + netCat(M, c), 0) : (A.cat[c] || 0) * (lordo || !isTassata(c) ? 1 : 1 - taxP(A.y, A.mo));
+  const entV = cols.map((A, i) => v(i, lordo ? A.ent : A.ent - A.taxAcc));
   h += grpRow("ent", lordo ? "Entrate lorde" : "Entrate nette (tolte le imposte sulle entrate tassate)", "gent", entV);
-  if (UI.open.ent) catsOf("ent").forEach(c => { const cv = cols.map((A, i) => v(i, (A.cat[c.id] || 0) * kc(c.id))); if (any(cv)) h += catRow(c.id, cv, 0); });
+  if (UI.open.ent) catsOf("ent").forEach(c => { const cv = cols.map((A, i) => v(i, netCat(A, c.id))); if (any(cv)) h += catRow(c.id, cv, 0); });
   // risultato
   const res = cols.map((A, i) => v(i, resultOf(A)));
   h += `<tr class="gres"><td class="sticky">Risultato: profitto o perdita</td>${res.map(x => `<td class="n ${sgn(x)}">${fmt(x)}</td>`).join("")}${oc("")}</tr>`;
@@ -388,14 +390,16 @@ function genTable(cols, opt) {
 
 function smistHTML(y, mo) {
   const A = monthAgg(y, mo); const prev = mo > 1 ? monthAgg(y, mo - 1) : monthAgg(y - 1, 12);
-  const sumP = S.acc.reduce((s, a) => s + (+a.p || 0), 0);
+  const L = contiDelMese(y, mo); const tpPct = (L.find(a => a.tasse) || { p: 30 }).p; const pers = smistPersonalizzato(y, mo);
+  const sumP = r2(L.reduce((s, a) => s + (+a.p || 0), 0));
   const exT = prev.entExtraTax, exNT = prev.entExtra - prev.entExtraTax;
-  const rows = S.acc.map(a => {
-    const st = A.stip > 0 ? A.stip * a.p / 100 + (+a.fix || 0) : 0; const t = exT * a.p / 100; const nt = exNT * pctNonTassate(a) / 100;
-    return `<tr><td>${esc(a.n)}</td><td class="n">${a.p}%${a.fix ? ` ${a.fix > 0 ? "+" : ""}${eur0(a.fix)}` : ""}${pctNonTassate(a) !== +a.p ? `<br><span class="tiny muted">${pctNonTassate(a)}% non tassate</span>` : ""}</td><td class="n">${eur(st)}</td><td class="n">${eur(t)}</td><td class="n">${eur(nt)}</td><td class="n"><b>${eur(st + t + nt)}</b></td></tr>`;
+  const rows = L.map(a => {
+    const st = A.stip > 0 ? A.stip * a.p / 100 + (+a.fix || 0) : 0; const t = exT * a.p / 100; const nt = exNT * pctNonTassate(a, tpPct) / 100;
+    return `<tr><td>${esc(a.n)}</td><td class="n">${a.p}%${a.fix ? ` ${a.fix > 0 ? "+" : ""}${eur0(a.fix)}` : ""}${pctNonTassate(a, tpPct) !== +a.p ? `<br><span class="tiny muted">${pctNonTassate(a, tpPct)}% non tassate</span>` : ""}</td><td class="n">${eur(st)}</td><td class="n">${eur(t)}</td><td class="n">${eur(nt)}</td><td class="n"><b>${eur(st + t + nt)}</b></td></tr>`;
   }).join("");
   return `<section class="card"><h2>Dove bonificare i soldi ${legBtn(`Lo stipendio fisso (lordo) si divide subito. Le altre entrate del mese si sommano e si dividono il mese dopo. Sulle entrate non tassate non si accantonano imposte: la quota del conto imposte si divide sugli altri conti come hai scelto in Altro, Smistamento.`)}</h2>
-    ${sumP !== 100 ? `<div class="banner warn">Le percentuali sommano ${sumP}% invece di 100%. Correggile in Altro, Smistamento.</div>` : ""}
+    ${sumP !== 100 ? `<div class="banner warn">Le percentuali sommano ${sumP}% invece di 100%. Correggile${pers ? " con \"Modifica le percentuali di questo mese\"" : " in Altro, Smistamento"}.</div>` : ""}
+    <div class="row between small">${pers ? `<span class="badge warn">percentuali personalizzate per questo mese</span>` : `<span class="muted">Percentuali standard dello smistamento</span>`}<button class="ghost" data-act="smistmese" data-y="${y}" data-mo="${mo}">Modifica le percentuali di questo mese</button></div>
     <div class="tblwrap"><table><thead><tr><th>Conto</th><th class="n">Regola</th><th class="n">Stipendio fisso<br>${eur(A.stip)}</th><th class="n">Extra tassati di ${MESI3[(mo + 10) % 12]}<br>${eur(exT)}</th><th class="n">Extra non tassati di ${MESI3[(mo + 10) % 12]}<br>${eur(exNT)}</th><th class="n">Totale</th></tr></thead><tbody>${rows}</tbody></table></div>
     ${A.entExtra ? `<div class="banner">Entrate extra di ${MESI[mo - 1]} da dividere a ${MESI[mo % 12]}: <b class="num">${eur(A.entExtra)}</b> (tassate ${eur(A.entExtraTax)}, non tassate ${eur(A.entExtra - A.entExtraTax)})</div>` : ""}
   </section>`;
@@ -450,7 +454,7 @@ function viewAnno() {
   const totO = S.cats.filter(c => c.g === "nec" || c.g === "ext").reduce((s, c) => s + (S.obj[c.id] || 0), 0) * 12;
   const totV = Y.spese + (inclS ? Y.straord : 0); const pT = totO ? totV / totO * 100 : 0;
   const proie = curY && passed > 0 ? totV / (passed / 100) : null;
-  const entShow = lordo ? Y.ent : Y.ent - Y.entTax * tp;
+  const entShow = lordo ? Y.ent : Y.ent - Y.taxAcc;
   const ris = resultOf(Y);
   const fondo = taxFund(y);
   return `
@@ -460,18 +464,19 @@ function viewAnno() {
     <button type="button" data-act="annolordo" data-v="NO" class="${!lordo ? "on" : ""}">Entrate nette</button>
   </div>
   <div class="tiles">
-    <div class="tile"><span>${lordo ? "Entrate lorde" : "Entrate nette"}</span><b class="pos">${eur0(entShow)}</b>${Y.ent - Y.entTax > 0.004 ? `<span class="det">Tassate ${eur0(lordo ? Y.entTax : Y.entTax * (1 - tp))}</span><span class="det">Non tassate ${eur0(Y.ent - Y.entTax)}</span>` : ""}</div>
+    <div class="tile"><span>${lordo ? "Entrate lorde" : "Entrate nette"}</span><b class="pos">${eur0(entShow)}</b>${Y.ent - Y.entTax > 0.004 ? `<span class="det">Tassate ${eur0(lordo ? Y.entTax : Y.entTax - Y.taxAcc)}</span><span class="det">Non tassate ${eur0(Y.ent - Y.entTax)}</span>` : ""}</div>
     <div class="tile"><span>Spese necessarie + extra</span><b>${eur0(Y.spese)}</b>
       <span class="det">Necessarie ${eur0(Y.nec)}</span><span class="det">Extra ${eur0(Y.ext)}</span>${Y.nc ? `<span class="det">Senza categoria ${eur0(Y.nc)}</span>` : ""}</div>
     <div class="tile"><span>Straordinarie</span><b>${eur0(Y.straord)}</b></div>
     <div class="tile"><span>Investimenti (liquidità messa da parte)</span><b>${eur0(Y.inv)}</b></div>
-    ${lordo ? `<div class="tile"><span>Imposte accantonate (${Math.round(tp * 100)}% sulle entrate tassate)</span><b>${eur0(Y.entTax * tp)}</b></div>
+    ${lordo ? `<div class="tile"><span>Imposte accantonate (sulle entrate tassate)</span><b>${eur0(Y.taxAcc)}</b></div>
     <div class="tile"><span>Imposte già pagate nell'anno</span><b>${eur0(Y.tax)}</b><span class="det">Pagate con i soldi accantonati: non si tolgono di nuovo dal risultato</span></div>` : ""}
     <div class="tile"><span>Profitto o perdita dell'anno</span><b class="${sgn(ris)}">${eur0(ris)}</b>
       <label class="chk det" for="pS"><input type="checkbox" id="pS" data-act="tS" ${UI.tS ? "checked" : ""}>Togli le straordinarie</label>
       <label class="chk det" for="pI"><input type="checkbox" id="pI" data-act="tI" ${UI.tI ? "checked" : ""}>Togli gli investimenti</label>
       <span class="det">${lordo ? "Entrate lorde − imposte accantonate" : "Entrate nette"} − spese${UI.tS ? " − straordinarie" : ""}${UI.tI ? " − investimenti" : ""}</span></div>
   </div>
+  ${B ? avanzoHTML(y, mo, B) : ""}
   <label class="chk card" style="flex-direction:row" for="inclS"><input type="checkbox" id="inclS" data-act="inclS" ${inclS ? "checked" : ""}>Includi le spese straordinarie in obiettivi e grafici</label>
   <section class="card"><h2>Entrate e spese mese per mese ${legBtn(`Entrate nette = lorde meno il ${Math.round(tp * 100)}% accantonato per imposte sulle sole entrate tassate (stipendio fisso ed extra lavoro tassato). Quota spese prevista = soldi destinati alle spese di ogni mese, senza i mesi precedenti: se le barre gialle e rosse la superano, quel mese hai sforato.`)}</h2>
     <div class="row" style="gap:6px 16px">
@@ -493,8 +498,8 @@ function viewAnno() {
     </section>
   <section class="card"><h2>Budget mese per mese ${legBtn(`La barra confronta le spese necessarie, extra e senza categoria dell'anno con la somma delle quote di stipendio ed entrate extra destinate alle spese di ogni mese (senza riporto iniziale). La linea indica dove dovresti essere oggi. Colori: verde sotto il ritmo, giallo in linea, arancione al limite, rosso sopra, nero oltre il 120% del ritmo.`)}</h2>
     ${yearQuotaHTML(y, false)}
-    <div class="tblwrap"><table><thead><tr><th>Mese</th><th class="n">Quota spese del mese</th><th class="n">Bilancio mesi precedenti</th><th class="n">Bilancio compreso mese corrente</th><th class="n">Spese del mese</th><th class="n">Bilancio fine mese</th></tr></thead><tbody>
-    ${B.map((b, i) => b ? `<tr><td>${MESI[i]}</td><td class="n">${eur(b.mese)}</td><td class="n ${sgn(b.rip)}">${eur(b.rip)}</td><td class="n ${sgn(b.disp)}">${eur(b.disp)}</td><td class="n">${eur(b.spese)}</td><td class="n ${sgn(b.saldo)}">${eur(b.saldo)}</td></tr>` : "").join("")}
+    <div class="tblwrap"><table><thead><tr><th>Mese</th><th class="n">Quota spese del mese</th><th class="n">Bilancio mesi precedenti</th><th class="n">Bilancio compreso mese corrente</th><th class="n">Spese del mese</th><th class="n">Bilancio fine mese</th><th class="n">Avanzo → ${esc(nomeAvanzi())}</th></tr></thead><tbody>
+    ${B.map((b, i) => b ? `<tr><td>${MESI[i]}</td><td class="n">${eur(b.mese)}</td><td class="n ${sgn(b.rip)}">${eur(b.rip)}</td><td class="n ${sgn(b.disp)}">${eur(b.disp)}</td><td class="n">${eur(b.spese)}</td><td class="n ${sgn(b.saldo)}">${eur(b.saldo)}</td><td class="n ${sgn(b.avanzo)}">${eur(b.avanzo)}</td></tr>` : "").join("")}
   </tbody></table></div></section>
   ${lordo ? `<section class="card"><div class="row between"><h2>Imposte e contributi</h2><button class="ghost" data-act="sub2" data-v="tax">Dettaglio</button></div>
     <div class="kv"><span>Già accantonato a inizio anno</span><b>${eur0(taxIni(y))}</b><span>Accantonato nell'anno</span><b>${eur0(fondo.acc)}</b><span>Versato nell'anno</span><b>${eur0(fondo.vers)}</b><span>Fondo imposte oggi</span><b>${eur0(fondo.saldo)}</b></div></section>` : ""}
@@ -553,8 +558,8 @@ function openCatDetail(c, y, mo, onlyS) {
 /* ===== Vista: Altro ===== */
 function viewAltro() {
   const s = UI.altro;
-  if (!s) return `<div class="menu">
-    ${[["obj", "Obiettivi di spesa", "Tetto mensile per categoria"], ["smist", "Smistamento", "Percentuali sui conti"], ["ric", "Spese ricorrenti", "Abbonamenti, assicurazioni"], ["tax", "Imposte e contributi", "Accantonamenti e versamenti"], ["pat", "Patrimonio", "Inizio e fine anno, indici"], ["cred", "Crediti e debiti", "Chi ti deve e chi devi"], ["carb", "Carburante", "Prezzo al litro, km al litro"], ["cat", "Categorie", "Aggiungi, rinomina, colori"], ["dati", "Impostazioni e dati", "Anno, lordo o netto, collegamento"]].map(x => `<button data-act="sub" data-v="${x[0]}"><b>${x[1]}</b><span>${x[2]}</span></button>`).join("")}
+  if (!s) return annoHTML() + `<div class="menu">
+    ${[["obj", "Obiettivi di spesa", "Tetto mensile per categoria"], ["smist", "Smistamento", "Percentuali sui conti"], ["ric", "Spese ricorrenti", "Abbonamenti, assicurazioni"], ["tax", "Imposte e contributi", "Accantonamenti e versamenti"], ["pat", "Patrimonio", "Inizio e fine anno, indici"], ["cred", "Crediti e debiti", "Chi ti deve e chi devi"], ["carb", "Carburante", "Prezzo al litro, km al litro"], ["cat", "Categorie", "Aggiungi, rinomina, colori"], ["dati", "Impostazioni e dati", "Lordo o netto, collegamento"]].map(x => `<button data-act="sub" data-v="${x[0]}"><b>${x[1]}</b><span>${x[2]}</span></button>`).join("")}
   </div>`;
   const back = `<button class="ghost" data-act="sub" data-v="" style="align-self:flex-start">‹ Altro</button>`;
   return back + ({ obj: subObj, smist: subSmist, ric: subRic, tax: subTax, pat: subPat, cred: subCred, carb: subCarb, cat: subCat, dati: subDati }[s])();
@@ -584,16 +589,40 @@ function subObj() {
   h += `<div class="banner">Somma degli obiettivi: <b class="num">${eur0(all)}</b> al mese (${eur0(all * 12)} all'anno). Con lo stipendio fisso medio (${eur0(stipMed)}) il conto spese riceve circa <b class="num">${eur0(stipMed * spA.p / 100)}</b> al mese.</div></section>`;
   return h;
 }
+/* Mese da cui valgono le percentuali standard cambiate oggi: il mese dopo (o gennaio dell'anno scelto, se è più avanti) */
+function meseEffetto() { const n = new Date(); let y = n.getFullYear(), mo = n.getMonth() + 2; if (mo > 12) { mo = 1; y++; } const e = ymOf(y, mo), j = UI.y + "-01"; return j > e ? j : e; }
+function nomeYm(ym) { const [y, m] = ym.split("-"); return MESI[+m - 1] + " " + y; }
+function nomeAvanzi() { return S.imp.nome_conto_avanzi || "Prepagata"; }
+function descSmist(m) { return S.acc.map(a => esc(a.n) + " " + String((m[a.id] || { p: 0 }).p).replace(".", ",") + "%" + ((m[a.id] || {}).fix ? " " + ((m[a.id].fix > 0 ? "+" : "") + eur0(m[a.id].fix)) : "")).join(" · "); }
+/* Cambia una percentuale standard da meseEffetto() in poi, senza toccare i mesi già passati */
+function cambiaStandard(id, k, v) {
+  const eff = meseEffetto();
+  if (!versioniSmist().length) S.imp["smist_dal_" + firstYear() + "-01"] = serSmist(smistConti()); // fotografia di com'era finora
+  const m = smistStd(eff); S.acc.forEach(a => { if (!m[a.id]) m[a.id] = { p: 0, fix: 0 }; });
+  m[id][k] = v; S.imp["smist_dal_" + eff] = serSmist(m);
+  if (versioniSmist().pop() === eff) { const a = S.acc.find(x => x.id === id); if (a) a[k] = v; } // la scheda Conti tiene le più recenti
+  toast("Nuove percentuali da " + nomeYm(eff) + ": i mesi prima restano come erano");
+}
 function subSmist() {
-  const sum = S.acc.reduce((s, a) => s + (+a.p || 0), 0);
-  return `<section class="card"><h2>Smistamento delle entrate</h2>
-    <div class="small muted">Percentuale di ogni entrata da bonificare su ciascun conto. La correzione fissa vale solo sullo stipendio (es. un conto investimenti al 16% meno 100€, che vanno su un altro conto). Il conto spese decide quanto puoi spendere, il conto imposte quanto accantoni.</div>
+  const eff = meseEffetto(); const std = smistStd(eff); const passato = UI.y < new Date().getFullYear();
+  const pv = a => std[a.id] || { p: 0, fix: 0 };
+  const sum = r2(S.acc.reduce((s, a) => s + (+pv(a).p || 0), 0));
+  const vers = versioniSmist(); const pers = Object.keys(S.imp).filter(k => /^smist_mese_\d{4}-\d{2}$/.test(k) && S.imp[k]).map(k => k.slice(11)).sort();
+  const dis = passato ? "disabled" : "";
+  return `<section class="card"><h2>Smistamento ${UI.y}: percentuali standard</h2>
+    <div class="small muted">Percentuale di ogni entrata da bonificare su ciascun conto, ogni mese. La correzione fissa vale solo sullo stipendio. Il conto spese decide quanto puoi spendere, il conto imposte quanto accantoni.</div>
+    <div class="banner ${passato ? "warn" : ""} small">${passato ? `Il ${UI.y} è passato: le percentuali standard non si cambiano più. Per correggere un mese usa la schermata Mese, riquadro "Dove bonificare i soldi".` : `Se cambi le percentuali valgono da <b>${nomeYm(eff)}</b>: i mesi precedenti restano come erano. Per cambiare un solo mese usa la schermata Mese, riquadro "Dove bonificare i soldi".`}</div>
     <div class="tblwrap"><table><thead><tr><th>Conto</th><th class="n">%</th><th class="n">Correzione €</th><th>Spese</th><th>Imposte</th><th></th></tr></thead><tbody>
-    ${S.acc.map(a => `<tr><td><input value="${esc(a.n)}" data-acc="${a.id}" data-k="n" aria-label="Nome conto" style="min-width:150px"></td><td class="n"><input style="width:70px;text-align:right" inputmode="decimal" value="${a.p}" data-acc="${a.id}" data-k="p" aria-label="Percentuale"></td><td class="n"><input style="width:84px;text-align:right" inputmode="decimal" value="${a.fix || 0}" data-acc="${a.id}" data-k="fix" aria-label="Correzione fissa"></td><td><input type="radio" name="spacc" data-acc="${a.id}" data-k="spesa" ${a.spesa ? "checked" : ""} aria-label="Conto per le spese"></td><td><input type="radio" name="taxacc" data-acc="${a.id}" data-k="tasse" ${a.tasse ? "checked" : ""} aria-label="Conto per le imposte"></td><td><button class="ghost danger" data-act="accdel" data-id="${a.id}" aria-label="Elimina conto">Elimina</button></td></tr>`).join("")}
+    ${S.acc.map(a => `<tr><td><input value="${esc(a.n)}" data-acc="${a.id}" data-k="n" aria-label="Nome conto" style="min-width:150px"></td><td class="n"><input style="width:70px;text-align:right" inputmode="decimal" value="${pv(a).p}" data-acc="${a.id}" data-k="p" aria-label="Percentuale" ${dis}></td><td class="n"><input style="width:84px;text-align:right" inputmode="decimal" value="${pv(a).fix || 0}" data-acc="${a.id}" data-k="fix" aria-label="Correzione fissa" ${dis}></td><td><input type="radio" name="spacc" data-acc="${a.id}" data-k="spesa" ${a.spesa ? "checked" : ""} aria-label="Conto per le spese"></td><td><input type="radio" name="taxacc" data-acc="${a.id}" data-k="tasse" ${a.tasse ? "checked" : ""} aria-label="Conto per le imposte"></td><td><button class="ghost danger" data-act="accdel" data-id="${a.id}" aria-label="Elimina conto">Elimina</button></td></tr>`).join("")}
     </tbody></table></div>
-    <div class="row between"><b class="${sum === 100 ? "pos" : "neg"}">Totale ${sum}%</b><button data-act="accadd">+ Aggiungi conto</button></div>
-    <label for="ripIni">Bilancio di partenza di gennaio ${firstYear()} (avanzo o debito del mese prima). Gli anni dopo partono da soli dal bilancio di dicembre.<input id="ripIni" inputmode="decimal" value="${ripIni()}" data-k="ripIni"></label>
+    <div class="row between"><b class="${sum === 100 ? "pos" : "neg"}">Totale ${String(sum).replace(".", ",")}%</b><button data-act="accadd">+ Aggiungi conto</button></div>
+    <label for="ripIni">Bilancio di partenza di gennaio ${UI.y} (ogni anno riparte da qui; di solito 0)<input id="ripIni" inputmode="decimal" value="${ripAnno(UI.y)}" data-k="ripIni"></label>
+    <label for="nomeAv">Dove sposti a fine mese quello che avanza sul conto spese<input id="nomeAv" value="${esc(nomeAvanzi())}" data-k="nomeAv" placeholder="es. Prepagata"></label>
   </section>
+  ${vers.length || pers.length ? `<section class="card"><h2>Storico delle percentuali</h2>
+    ${vers.length ? `<div class="list">${vers.map(v => `<div class="item" style="cursor:default"><div class="t">Da ${nomeYm(v)}</div><div class="m">${descSmist(parseSmist(S.imp["smist_dal_" + v]))}</div></div>`).join("")}</div>` : ""}
+    ${pers.length ? `<b class="small">Mesi personalizzati</b><div class="list">${pers.map(v => `<div class="item" data-act="smistmese" data-y="${v.slice(0, 4)}" data-mo="${+v.slice(5)}" role="button" tabindex="0"><div class="t">${nomeYm(v)}</div><div class="m">${descSmist(parseSmist(S.imp["smist_mese_" + v]))}</div></div>`).join("")}</div>` : ""}
+  </section>` : ""}
   <section class="card"><h2>Entrate non tassate</h2>
     <div class="small muted">Sulle entrate non tassate (es. extra lavoro non tassato, mance, royalties, altre entrate) non si accantonano imposte. Il ${taxAcc() ? taxAcc().p : 0}% che andrebbe sul conto imposte lo dividi qui sugli altri conti, come vuoi. Quali entrate sono tassate lo scegli in Altro, Categorie.</div>
     ${(() => { const tp = taxAcc() ? +taxAcc().p || 0 : 0; const r = ripNonTassate(); const tot = Object.values(r).reduce((s, x) => s + x, 0);
@@ -603,6 +632,71 @@ function subSmist() {
       <div class="row between"><b class="${Math.abs(tot - tp) < 0.001 ? "pos" : "neg"}">Quota imposte ripartita: ${String(r2(tot)).replace(".", ",")}% su ${tp}%</b></div>
       ${Math.abs(tot - tp) < 0.001 ? "" : `<div class="banner warn">La quota ripartita deve essere ${tp}%: ${tot < tp ? "mancano " + String(r2(tp - tot)).replace(".", ",") + " punti, che restano non assegnati" : "hai assegnato " + String(r2(tot - tp)).replace(".", ",") + " punti in più"}.</div>`}`; })()}
   </section>`;
+}
+
+/* ===== Avanzo del conto spese a fine mese ===== */
+function avanzoHTML(y, mo, B) {
+  const now = new Date(); const inCorso = y === now.getFullYear() && mo === now.getMonth() + 1; const nome = esc(nomeAvanzi());
+  return `<section class="card"><h2>Fine mese: avanzo del conto spese ${legBtn(`Ogni fine mese quello che resta sul conto spese (quota del mese meno spese del mese) va spostato su ${nome}, così il conto spese riparte da zero. Restano comunque soldi per le spese: il bilancio passa al mese dopo. Se hai speso più della quota, la differenza la prendi da ${nome}. Il bilancio di fine mese dovrebbe corrispondere a quello che c'è su ${nome}.`)}</h2>
+    <div class="kv">
+      <span>${inCorso ? "Rimasto finora" : "Rimasto"} sul conto spese (quota − spese del mese)</span><b class="${sgn(B.avanzo)}">${eur(B.avanzo)}</b>
+      <span><b>${B.avanzo >= 0 ? "Da spostare su " + nome : "Da prendere da " + nome + " per coprire"}</b></span><b>${eur(Math.abs(B.avanzo))}</b>
+      <span>Bilancio di fine mese (dovrebbe esserci su ${nome})</span><b class="${sgn(B.saldo)}">${eur(B.saldo)}</b>
+    </div>
+    ${inCorso ? `<div class="small muted">Mese in corso: il numero definitivo lo vedi a fine mese.</div>` : ""}
+  </section>`;
+}
+
+/* ===== Percentuali di un solo mese ===== */
+function openSmistMese(y, mo) {
+  const L = contiDelMese(y, mo); const ym = ymOf(y, mo); const pers = smistPersonalizzato(y, mo);
+  modal(`<div class="row between"><h2>Percentuali di ${MESI[mo - 1]} ${y}</h2><button class="ghost" data-x="1">Chiudi</button></div>
+    <div class="small muted">Valgono solo per questo mese: le percentuali standard e gli altri mesi non cambiano.${pers ? " Ora sono personalizzate." : " Ora sono quelle standard."}</div>
+    <div class="tblwrap"><table><thead><tr><th>Conto</th><th class="n">%</th><th class="n">Correzione €</th></tr></thead><tbody>
+    ${L.map(a => `<tr><td>${esc(a.n)}${a.spesa ? ' <span class="badge">spese</span>' : ""}${a.tasse ? ' <span class="badge">imposte</span>' : ""}</td><td class="n"><input style="width:70px;text-align:right" inputmode="decimal" id="smp_${a.id}" value="${a.p}"></td><td class="n"><input style="width:84px;text-align:right" inputmode="decimal" id="smf_${a.id}" value="${a.fix || 0}"></td></tr>`).join("")}
+    </tbody></table></div>
+    <div id="smTot" class="small"></div>
+    <button class="pri wide" id="smSave">Salva per ${MESI[mo - 1]}</button>
+    ${pers ? `<button class="wide" id="smReset">Torna alle percentuali standard</button>` : ""}`, sh => {
+    const leggi = () => { const m = {}; L.forEach(a => { const p = parseNum(sh.querySelector("#smp_" + a.id).value), f = parseNum(sh.querySelector("#smf_" + a.id).value); m[a.id] = { p: isNaN(p) ? 0 : p, fix: isNaN(f) ? 0 : f }; }); return m; };
+    const tot = () => { const s = r2(Object.values(leggi()).reduce((x, v) => x + v.p, 0)); const el = sh.querySelector("#smTot"); el.textContent = "Totale " + String(s).replace(".", ",") + "%" + (s === 100 ? "" : " (dovrebbe essere 100%)"); el.className = "small " + (s === 100 ? "pos" : "neg"); };
+    sh.addEventListener("input", tot); tot();
+    sh.querySelector("#smSave").addEventListener("click", () => { S.imp["smist_mese_" + ym] = serSmist(leggi()); persist(); closeModal(); render(); toast("Percentuali di " + MESI[mo - 1] + " salvate"); });
+    const r = sh.querySelector("#smReset"); if (r) r.addEventListener("click", () => { S.imp["smist_mese_" + ym] = ""; persist(); closeModal(); render(); toast(MESI[mo - 1] + ": tornano le percentuali standard"); });
+  });
+}
+
+/* ===== Anno da analizzare e anno nuovo ===== */
+function anniDisponibili() {
+  const s = new Set(years()); s.add(annoPredefinito());
+  Object.keys(S.imp).forEach(k => { const m = /^(?:obiettivi|riporto_iniziale|imposte_accantonate_inizio|obiettivo_patrimonio)_(\d{4})$/.exec(k) || /^smist_dal_(\d{4})-01$/.exec(k); if (m && S.imp[k] !== "") s.add(+m[1]); });
+  S.patRows.forEach(v => s.add(+v.anno));
+  return [...s].sort();
+}
+function annoHTML() {
+  const ap = annoPredefinito(); const anni = anniDisponibili(); const nuovo = Math.max(...anni) + 1;
+  return `<section class="card"><h2>Anno da analizzare</h2>
+    <div class="row" style="flex-wrap:nowrap"><select id="annoPred" data-k="annoPred" aria-label="Anno da analizzare" style="flex:1;font-family:var(--font-display);font-size:20px;font-weight:700">${anni.map(x => `<option ${x === ap ? "selected" : ""}>${x}</option>`).join("")}</select>
+    <button class="pri" data-act="creaanno" style="flex:none">+ Crea il ${nuovo}</button></div>
+    <div class="small muted">L'anno scelto si apre in Movimenti, Mese, Anno, Smistamento, Obiettivi, Imposte e Patrimonio. Ogni anno ha le sue percentuali di smistamento e i suoi obiettivi, e riparte da zero.</div></section>`;
+}
+function copiaPatrimonio(y) {
+  const prev = patFor(y - 1); if (patFor(y).voci.length || !prev.voci.length) return;
+  prev.voci.forEach(v => S.patRows.push({ anno: y, id: uid(), n: v.n, t: v.t, ini: (v.fin != null && v.fin !== "") ? v.fin : v.ini, fin: null }));
+  if (prev.obiettivo && impNum("obiettivo_patrimonio_" + y) == null) S.imp["obiettivo_patrimonio_" + y] = String(prev.obiettivo);
+}
+function creaAnno() {
+  const n = Math.max(...anniDisponibili()) + 1; const p = n - 1;
+  confirmBox(`Creo il ${n}? Copio dal ${p} le percentuali di smistamento e gli obiettivi di spesa (poi li puoi cambiare), creo le voci del patrimonio partendo dai valori di fine ${p}, e metto a 0 il bilancio di partenza e le imposte già accantonate. Il ${n} diventa l'anno da analizzare.`, "Crea il " + n, () => {
+    if (!versioniSmist().length) S.imp["smist_dal_" + firstYear() + "-01"] = serSmist(smistConti());
+    if (!S.imp["smist_dal_" + n + "-01"]) S.imp["smist_dal_" + n + "-01"] = serSmist(smistStd(p + "-12"));
+    if (!S.imp["obiettivi_" + n]) S.imp["obiettivi_" + n] = serObj(objFor(p));
+    if (S.imp["riporto_iniziale_" + n] == null) S.imp["riporto_iniziale_" + n] = "0";
+    if (S.imp["imposte_accantonate_inizio_" + n] == null) S.imp["imposte_accantonate_inizio_" + n] = "0";
+    copiaPatrimonio(n);
+    S.imp.anno_predefinito = String(n); UI.y = n; UI.mo = 1;
+    persist(); render(); toast("Creato il " + n);
+  });
 }
 function subRic() {
   const nextOf = r => { const t = todayISO(); let [y, m] = r.from.split("-").map(Number); let g = 0; while (g++ < 600) { const ym = y + "-" + pad(m); if (r.to && ym > r.to) return null; const d = ym + "-01"; if (d > t) return d; m += +r.freq || 1; while (m > 12) { m -= 12; y++; } } return null; };
@@ -617,7 +711,7 @@ function subTax() {
   const y = UI.y; const F = taxFund(y); const tp = taxP();
   return `<section class="card"><h2>Imposte e contributi ${y}</h2>
     <div class="small muted">Lo stipendio fisso è lordo: ogni mese accantoni il ${Math.round(tp * 100)}% sul conto imposte (${esc((taxAcc() || { n: "conto imposte" }).n)}), sullo stipendio fisso e sulle entrate extra tassate del mese prima (non sulle entrate non tassate: quali sono lo scegli in Altro, Categorie). I versamenti sono le spese con categoria "Imposte e contributi versati".</div>
-    <label for="taxIni">Soldi già accantonati per imposte e contributi a inizio anno<input id="taxIni" inputmode="decimal" value="${impNum("imposte_accantonate_inizio_" + y) ?? ""}" placeholder="${eur0(taxIni(y))} (dal fondo dell'anno prima)" data-k="taxIni"></label>
+    <label for="taxIni">Soldi già accantonati per imposte e contributi a inizio anno<input id="taxIni" inputmode="decimal" value="${impNum("imposte_accantonate_inizio_" + y) ?? ""}" placeholder="0" data-k="taxIni"></label>
     <div class="tiles"><div class="tile"><span>Accantonato nell'anno</span><b>${eur0(F.acc)}</b></div><div class="tile"><span>Versato nell'anno</span><b>${eur0(F.vers)}</b></div><div class="tile"><span>Fondo imposte oggi</span><b class="${F.saldo < 0 ? "neg" : ""}">${eur0(F.saldo)}</b></div></div>
     <div class="tblwrap"><table><thead><tr><th>Mese</th><th class="n">Accantonato</th><th class="n">Versato</th><th class="n">Fondo</th></tr></thead><tbody>
       <tr><td class="muted">Inizio anno</td><td></td><td></td><td class="n">${eur(taxIni(y))}</td></tr>
@@ -706,11 +800,7 @@ function subCat() {
 }
 function subDati() {
   const lordo = LORDO(); const cfg = leggiCfg() || {}; const n = codaLunghezza();
-  const anni = years(); const ap = annoPredefinito(); if (!anni.includes(ap)) anni.push(ap);
-  return `<section class="card"><h2>Anno da analizzare</h2>
-    <label for="annoPred">Anno che si apre in Movimenti, Mese, Anno, Imposte e Patrimonio<select id="annoPred" data-k="annoPred">${anni.sort().map(x => `<option ${x === ap ? "selected" : ""}>${x}</option>`).join("")}<option value="${Math.max(...anni) + 1}">${Math.max(...anni) + 1}</option></select></label>
-    <div class="small muted">Nelle schermate Mese e Anno puoi sempre spostarti con le frecce. Il bilancio di dicembre, il fondo imposte e il patrimonio di fine anno passano da soli all'anno dopo.</div></section>
-  <section class="card"><h2>Stipendio lordo o netto</h2>
+  return `  <section class="card"><h2>Stipendio lordo o netto</h2>
     <label class="chk"><input type="radio" name="lordo" data-k="lordo" value="1" ${lordo ? "checked" : ""}>Mostra le entrate lorde e indica le imposte accantonate</label>
     <label class="chk"><input type="radio" name="lordo" data-k="lordo" value="0" ${!lordo ? "checked" : ""}>Mostra le entrate nette (tolto il ${Math.round(taxP() * 100)}%) e nascondi le imposte</label>
     <div class="small muted">Vale per grafici e tabelle di mese e anno.</div></section>
@@ -792,7 +882,7 @@ function afterRender() {
     const BY = budgetYear(UI.y);
     ds.push({ type: "line", label: "Quota spese prevista", data: cut(BY.map(b => b ? r2(b.mese) : null)), borderColor: cssVar("--ink"), backgroundColor: cssVar("--ink"), borderWidth: 2, stepped: "middle", stack: "quota", pointRadius: 0, hidden: !UI.lineQ });
     ds.push({ type: "line", label: "Entrate lorde", data: cut(Y.months.map(a => r2(a.ent))), borderColor: "#2b8a3e", backgroundColor: "#2b8a3e", stack: "lorde", tension: .3, pointRadius: 3, hidden: !UI.lineL });
-    ds.push({ type: "line", label: "Entrate nette", data: cut(Y.months.map(a => r2(a.ent - a.entTax * tp))), borderColor: "#69db7c", backgroundColor: "#69db7c", borderDash: [6, 4], stack: "nette", tension: .3, pointRadius: 3, hidden: !UI.lineN });
+    ds.push({ type: "line", label: "Entrate nette", data: cut(Y.months.map(a => r2(a.ent - a.taxAcc))), borderColor: "#69db7c", backgroundColor: "#69db7c", borderDash: [6, 4], stack: "nette", tension: .3, pointRadius: 3, hidden: !UI.lineN });
     charts.push(new Chart(el, { data: { labels: MESI3, datasets: ds }, options: { maintainAspectRatio: false, interaction: { mode: "index", intersect: false }, plugins: { tooltip: { callbacks: { label: c => c.dataset.label + ": " + eur(c.raw) } } }, scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, grid: { color: line }, ticks: { callback: v => v.toLocaleString("it-IT") + "€" } } } } }));
     const e2 = document.getElementById("chYearCat"); if (e2) charts.push(catBarChart(e2, catItems(Y), UI.y, ""));
   }
@@ -811,6 +901,8 @@ document.getElementById("view").addEventListener("click", e => {
   else if (a === "gomov") { UI.f = { mo: "", c: "", q: "" }; go("mov"); }
   else if (a === "gonc") { UI.f = { mo: "", c: "__nc", q: "" }; UI.y = years()[years().length - 1]; go("mov"); }
   else if (a === "annolordo") { S.imp.mostra_lordo = b.dataset.v; persist(); const sy = window.scrollY; render(); window.scrollTo(0, sy); }
+  else if (a === "creaanno") creaAnno();
+  else if (a === "smistmese") openSmistMese(+b.dataset.y, +b.dataset.mo);
   else if (a === "godv") { UI.f = { mo: "", c: "__dv", q: "" }; go("mov"); }
   else if (a === "retry") { invia(true); }
   else if (a === "refresh") { aggiornaDalFoglio(true); }
@@ -887,7 +979,7 @@ document.getElementById("view").addEventListener("change", e => {
     const acc = S.acc.find(x => x.id === el.dataset.acc); const k = el.dataset.k;
     if (k === "spesa") S.acc.forEach(x => x.spesa = x.id === acc.id);
     else if (k === "tasse") S.acc.forEach(x => x.tasse = x.id === acc.id);
-    else if (k === "n") acc.n = el.value.trim() || acc.n; else { const v = parseNum(el.value); acc[k] = isNaN(v) ? 0 : v; }
+    else if (k === "n") acc.n = el.value.trim() || acc.n; else { const v = parseNum(el.value); cambiaStandard(acc.id, k, isNaN(v) ? 0 : v); }
     persist(); render(); return;
   }
   if (el.dataset.ntr) {
@@ -896,9 +988,10 @@ document.getElementById("view").addEventListener("change", e => {
     persist(); const sy = window.scrollY; render(); window.scrollTo(0, sy); return;
   }
   if (el.dataset.tax) { const set = new Set(tassate()); if (el.checked) set.add(el.dataset.tax); else set.delete(el.dataset.tax); S.imp.categorie_tassate = [...set].join(","); persist(); render(); toast("Imposte ricalcolate"); return; }
+  if (el.dataset.k === "nomeAv") { S.imp.nome_conto_avanzi = el.value.trim(); persist(); render(); return; }
   if (el.dataset.k === "lordo") { S.imp.mostra_lordo = el.value === "1" ? "SI" : "NO"; persist(); render(); return; }
   if (el.dataset.k === "annoPred") { S.imp.anno_predefinito = String(el.value); UI.y = +el.value; persist(); render(); toast("Anno da analizzare: " + el.value); return; }
-  if (el.dataset.k === "ripIni") { const v = parseNum(el.value); S.imp["riporto_iniziale_" + firstYear()] = String(isNaN(v) ? 0 : v); persist(); render(); return; }
+  if (el.dataset.k === "ripIni") { const v = parseNum(el.value); S.imp["riporto_iniziale_" + UI.y] = String(isNaN(v) ? 0 : v); persist(); render(); return; }
   if (el.dataset.k === "taxIni") { const v = parseNum(el.value); const k = "imposte_accantonate_inizio_" + UI.y; if (isNaN(v)) delete S.imp[k]; else S.imp[k] = String(v); persist(); render(); return; }
   if (el.dataset.k === "patObj") { const v = parseNum(el.value); if (v > 0) S.imp["obiettivo_patrimonio_" + UI.y] = String(v); persist(); render(); return; }
   if (el.dataset.pat) { const v = S.patRows.find(x => x.id === el.dataset.pat); const k = el.dataset.k; if (k === "n") v.n = el.value.trim() || v.n; else { const n = parseNum(el.value); v[k] = isNaN(n) ? (k === "fin" ? null : 0) : n; } persist(); render(); return; }

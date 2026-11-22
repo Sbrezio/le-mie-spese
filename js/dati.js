@@ -76,7 +76,7 @@ function movInRiga(m) {
     nota: m.n || "", ricorrente_id: m.r || "", da_verificare: m.dv ? "SI" : "", origine: m.o || "app"
   };
 }
-const catInRiga = c => ({ id: c.id, nome: c.n, gruppo: c.g, emoji: c.e || "", colore: c.col || "", obiettivo_mensile: S.obj[c.id] || "", attiva: c.off ? "NO" : "SI" });
+const catInRiga = c => ({ id: c.id, nome: c.n, gruppo: c.g, emoji: c.e || "", colore: c.col || "", obiettivo_mensile: (S.objBase || S.obj)[c.id] || "", attiva: c.off ? "NO" : "SI" });
 const contoInRiga = a => ({ id: a.id, nome: a.n, percentuale: +a.p || 0, correzione_fissa: +a.fix || 0, conto_spese: a.spesa ? "SI" : "NO", conto_imposte: a.tasse ? "SI" : "NO" });
 const ricInRiga = r => ({ id: r.id, descrizione: r.t, categoria: r.c || "", importo: r.a, ogni_mesi: +r.freq || 1, dal_mese: r.from || "", al_mese: r.to || "" });
 const credInRiga = c => ({ id: c.id, tipo: c.tipo, persona: c.chi, importo: c.a, motivo: c.mot || "", data: c.d, saldato: c.ok ? "SI" : "NO" });
@@ -91,6 +91,7 @@ function daFoglio(j) {
     s.cats.push({ id: txt(r.id), n: txt(r.nome), g: txt(r.gruppo), e: txt(r.emoji), col: txt(r.colore) || "#adb5bd", off: txt(r.attiva).toUpperCase() === "NO" });
     const o = numO(r.obiettivo_mensile); if (o > 0) s.obj[r.id] = o;
   }
+  s.objBase = Object.assign({}, s.obj); s.objAnno = null; // obiettivi della scheda Categorie; quelli per anno stanno in Impostazioni
   s.acc = (j.conti || []).filter(r => r.id).map(r => ({ id: txt(r.id), n: txt(r.nome), p: numO(r.percentuale) || 0, fix: numO(r.correzione_fissa) || 0, spesa: SI(r.conto_spese), tasse: SI(r.conto_imposte) }));
   s.ric = (j.ricorrenti || []).filter(r => r.id).map(r => ({ id: txt(r.id), t: txt(r.descrizione), c: txt(r.categoria), a: numO(r.importo) || 0, freq: +r.ogni_mesi || 1, from: txt(r.dal_mese).slice(0, 7), to: txt(r.al_mese).slice(0, 7) }));
   s.cred = (j.crediti || []).filter(r => r.id).map(r => ({ id: txt(r.id), tipo: r.tipo === "debito" ? "debito" : "credito", chi: txt(r.persona), a: numO(r.importo) || 0, mot: txt(r.motivo), d: txt(r.data).slice(0, 10), ok: SI(r.saldato) }));
@@ -127,7 +128,7 @@ function caricaCache() {
     CODA = JSON.parse(localStorage.getItem(K_CODA) || "[]");
     const d = JSON.parse(localStorage.getItem(K_DATI) || "null");
     if (!d || !d.S || !d.SNAP) return null;
-    SNAP = d.SNAP; S = d.S; sortMovs(); invalidate(); return S;
+    SNAP = d.SNAP; S = d.S; if (!S.objBase) S.objBase = Object.assign({}, S.obj); S.objAnno = null; sortMovs(); invalidate(); return S;
   } catch (e) { return null; }
 }
 function applicaDalFoglio(j) {
@@ -161,6 +162,8 @@ function persist() {
   invalidate();
   if (!S || !SNAP) return;
   GEN++;
+  // Obiettivi modificati nelle schermate: si salvano come obiettivi dell'anno che si sta guardando
+  if (S.objAnno && serObj(S.obj) !== serObj(objFor(S.objAnno))) S.imp["obiettivi_" + S.objAnno] = serObj(S.obj);
   const ora = istantanea();
   const nomi = { Categorie: "salvaCategorie", Conti: "salvaConti", Ricorrenti: "salvaRicorrenti", Crediti: "salvaCrediti", Patrimonio: "salvaPatrimonio", Km: "salvaKm" };
   const conv = { Categorie: S.cats.map(catInRiga), Conti: S.acc.map(contoInRiga), Ricorrenti: S.ric.map(ricInRiga), Crediti: S.cred.map(credInRiga), Patrimonio: S.patRows.map(patInRiga), Km: S.km.map(kmInRiga) };

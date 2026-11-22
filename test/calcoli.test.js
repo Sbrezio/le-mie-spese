@@ -146,7 +146,8 @@ ok(JSON.parse(r1).credito_saldato === "SI" && JSON.parse(r1).divisa_tipo === "cr
 ok(A(`JSON.stringify(movInRiga(rigaInMov(${r1})))`) === r1, "spesa divisa: andata e ritorno identici");
 // Anno nuovo: il fondo imposte e il bilancio passano da soli
 A(`S = JSON.parse(JSON.stringify(__stato)); sortMovs(); invalidate();`);
-ok(vicino(A(`taxIni(2027)`), A(`taxFund(2026).saldo`)), "anno nuovo: imposte accantonate a inizio 2027 = fondo di fine 2026");
+ok(vicino(A(`taxIni(2027)`), 0), "anno nuovo: imposte accantonate a inizio 2027 partono da 0");
+ok(vicino(A(`ripAnno(2027)`), 0), "anno nuovo: bilancio di partenza di gennaio 2027 = 0");
 A(`S.imp.imposte_accantonate_inizio_2027 = "1234"; invalidate();`);
 ok(vicino(A(`taxIni(2027)`), 1234), "anno nuovo: se indicato a mano vale il valore scritto");
 
@@ -191,8 +192,39 @@ ok(A('cat("extratax") && cat("extratax").g') === "ent", "aggiornamento: nuova ca
 ok(A("S.imp.categorie_tassate") === "stip,extratax" && A("S.imp.conto_entrate_non_tassate") === ID.ri, "aggiornamento: tassate stipendio ed extra tassato, quota imposte sul conto risparmi");
 ok(A("aggiornaStruttura()") === false, "aggiornamento: la seconda volta non cambia nulla");
 
+/* ---------- Smistamento nel tempo ---------- */
+console.log("6. Smistamento: standard dal mese dopo e mesi personalizzati");
+A(`S = JSON.parse(JSON.stringify(__stato)); sortMovs(); invalidate();`);
+const SP = A("spendAcc().id");
+const prima6 = JSON.parse(A("JSON.stringify(budgetYear(2026).map(b => b && b.mese))"));
+// cambio dello standard da luglio: conto spese dal 29% al 39% (e il conto risparmi scende)
+A(`{ S.imp["smist_dal_2026-01"] = serSmist(smistConti()); const m = smistConti(); m["${SP}"].p = 39; S.imp["smist_dal_2026-07"] = serSmist(m); invalidate(); }`);
+const dopo6 = JSON.parse(A("JSON.stringify(budgetYear(2026).map(b => b && b.mese))"));
+ok(prima6.slice(0, 6).every((x, i) => vicino(x, dopo6[i])), "cambio da luglio: gennaio-giugno restano uguali");
+const stip7 = A("monthAgg(2026, 7).stip");
+ok(stip7 > 0 && dopo6[6] > prima6[6], "cambio da luglio: da luglio la quota spese cresce (" + prima6[6].toFixed(2) + " → " + dopo6[6].toFixed(2) + ")");
+ok(A("spendAcc(2026, 6).p") === 29 && A("spendAcc(2026, 7).p") === 39 && A("spendAcc(2026, 12).p") === 39, "percentuali in vigore: 29% fino a giugno, 39% da luglio");
+// mese personalizzato: solo marzo al 50%
+A(`{ const m = smistStd("2026-03"); m["${SP}"].p = 50; S.imp["smist_mese_2026-03"] = serSmist(m); invalidate(); }`);
+const pers6 = JSON.parse(A("JSON.stringify(budgetYear(2026).map(b => b && b.mese))"));
+ok(!vicino(pers6[2], dopo6[2]) && vicino(pers6[1], dopo6[1]) && vicino(pers6[3], dopo6[3]), "marzo personalizzato: cambia solo marzo");
+ok(A("smistPersonalizzato(2026, 3)") === true && A("smistPersonalizzato(2026, 4)") === false, "marzo risulta personalizzato, aprile no");
+A(`S.imp["smist_mese_2026-03"] = ""; invalidate();`);
+ok(vicino(A("budgetYear(2026)[2].mese"), dopo6[2]), "marzo riportato allo standard");
+// imposte del mese con la percentuale del mese
+A(`{ const m = smistStd("2026-09"); m["${A("taxAcc().id")}"].p = 20; S.imp["smist_dal_2026-09"] = serSmist(m); invalidate(); }`);
+ok(vicino(A("monthAgg(2026, 10).taxAcc"), A("monthAgg(2026, 10).entTax") * 0.2) && vicino(A("monthAgg(2026, 8).taxAcc"), A("monthAgg(2026, 8).entTax") * 0.3), "imposte accantonate: 30% fino ad agosto, 20% da settembre");
+// avanzo del mese
+const b5 = JSON.parse(A("JSON.stringify(budgetYear(2026)[4])"));
+ok(vicino(b5.avanzo, b5.mese - b5.spese), "avanzo del mese = quota del mese meno spese del mese");
+ok(vicino(A("budgetYear(2026)[5].rip"), b5.saldo), "il bilancio passa comunque al mese dopo");
+// obiettivi per anno
+A(`S = JSON.parse(JSON.stringify(__stato)); invalidate(); S.imp.obiettivi_2027 = serObj(Object.assign(objFor(2026), { risto: 999 }));`);
+ok(A("objFor(2027).risto") === 999 && A("objFor(2026).risto") === stato.obj.risto, "obiettivi: il 2027 ha i suoi, il 2026 resta com'era");
+ok(A("objFor(2028).risto") === stato.obj.risto, "obiettivi: un anno senza obiettivi propri usa quelli di partenza");
+
 /* ---------- Coda delle modifiche ---------- */
-console.log("6. Coda delle modifiche (unione)");
+console.log("7. Coda delle modifiche (unione)");
 const u = JSON.parse(A(`JSON.stringify(unisciModifiche({ aggiungi: [{ id: "a", v: 1 }], modifica: [{ id: "b", v: 1 }], elimina: [] }, { aggiungi: [], modifica: [{ id: "a", v: 2 }, { id: "b", v: 2 }], elimina: ["c"] }))`));
 ok(u.aggiungi.length === 1 && u.aggiungi[0].v === 2, "modifica di un movimento non ancora inviato: resta un'aggiunta con i dati nuovi");
 ok(u.modifica.length === 1 && u.modifica[0].v === 2, "due modifiche dello stesso movimento: vale l'ultima");

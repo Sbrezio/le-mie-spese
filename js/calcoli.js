@@ -83,19 +83,37 @@ function grpOf(id) { if (!id || id === "__nc") return "nc"; const c = cat(id); r
 function catsOf(g) { return S.cats.filter(c => c.g === g); }
 function sortMovs() { S.movs.sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : ((b.r ? 1 : 0) - (a.r ? 1 : 0))); }
 function years() { const ys = new Set(S.movs.map(m => +m.d.slice(0, 4))); ys.add(new Date().getFullYear()); return [...ys].sort(); }
-function spendAcc() { return S.acc.find(a => a.spesa) || S.acc[0]; }
-function taxAcc() { return S.acc.find(a => a.tasse); }
-function taxP() { const t = taxAcc(); return (t ? +t.p : 30) / 100; }
+/* ===== Smistamento nel tempo =====
+   - Percentuali "standard": in Impostazioni con chiavi smist_dal_aaaa-mm ("id:percentuale:correzione;..."),
+     valgono da quel mese in poi. Se non ce n'è nessuna valgono quelle della scheda Conti.
+   - Percentuali di un solo mese: chiave smist_mese_aaaa-mm (stesso formato), modificate dalla schermata Mese.
+   - La scheda Conti tiene nomi, conto spese / conto imposte e le percentuali standard più recenti. */
+const ymOf = (y, mo) => y + "-" + pad(mo);
+function parseSmist(s) { const r = {}; String(s || "").split(";").forEach(x => { const [id, p, f] = x.split(":"); if (id) r[id] = { p: parseNum(p) || 0, fix: parseNum(f) || 0 }; }); return r; }
+function serSmist(m) { return Object.keys(m).map(id => id + ":" + r2(+m[id].p || 0) + ":" + r2(+m[id].fix || 0)).join(";"); }
+function smistConti() { const r = {}; S.acc.forEach(a => r[a.id] = { p: +a.p || 0, fix: +a.fix || 0 }); return r; }
+function versioniSmist() { return Object.keys(S.imp).filter(k => /^smist_dal_\d{4}-\d{2}$/.test(k) && S.imp[k]).map(k => k.slice(10)).sort(); }
+function smistStd(ym) { const v = versioniSmist().filter(x => x <= ym).pop(); return v ? parseSmist(S.imp["smist_dal_" + v]) : smistConti(); }
+function smistPersonalizzato(y, mo) { return !!S.imp["smist_mese_" + ymOf(y, mo)]; }
+function smistMese(y, mo) { const k = "smist_mese_" + ymOf(y, mo); return S.imp[k] ? parseSmist(S.imp[k]) : smistStd(ymOf(y, mo)); }
+/* Conti con le percentuali in vigore in quel mese (senza mese: quelle della scheda Conti) */
+function contiDelMese(y, mo) { if (!y) return S.acc; const m = smistMese(y, mo); return S.acc.map(a => Object.assign({}, a, m[a.id] || { p: 0, fix: 0 })); }
+function spendAcc(y, mo) { const L = contiDelMese(y, mo); return L.find(a => a.spesa) || L[0]; }
+function taxAcc(y, mo) { return contiDelMese(y, mo).find(a => a.tasse); }
+function taxP(y, mo) { const t = taxAcc(y, mo); return (t ? +t.p : 30) / 100; }
+/* Obiettivi di spesa per anno: chiave obiettivi_aaaa ("id:valore,..."); se manca valgono quelli della scheda Categorie */
+function objFor(y) {
+  const s = S.imp["obiettivi_" + y]; const base = S.objBase || S.obj || {};
+  if (!s) return Object.assign({}, base);
+  const r = {}; s.split(",").forEach(x => { const [id, v] = x.split(":"); const n = parseNum(v); if (id && n > 0) r[id] = n; }); return r;
+}
+const serObj = o => Object.keys(o).filter(k => o[k] > 0).sort().map(k => k + ":" + r2(o[k])).join(",");
 const LORDO = () => (S.imp.mostra_lordo || "SI") !== "NO";
 /* Impostazioni per anno (scheda Impostazioni del foglio) */
 function impNum(k) { const v = parseNum(S.imp[k]); return isNaN(v) ? null : v; }
-/* Bilancio di partenza del primo anno con dati */
-function ripIni() { return impNum("riporto_iniziale_" + firstYear()) || 0; }
-/* Soldi accantonati per imposte a inizio anno: se non indicati, il fondo di fine anno precedente */
-function taxIni(y) {
-  const v = impNum("imposte_accantonate_inizio_" + y); if (v != null) return v;
-  return y > firstYear() ? taxFund(y - 1).saldo : 0;
-}
+/* Ogni anno riparte da zero: bilancio di partenza di gennaio e imposte già accantonate si scrivono a mano (di partenza 0) */
+function ripAnno(y) { return impNum("riporto_iniziale_" + y) || 0; }
+function taxIni(y) { return impNum("imposte_accantonate_inizio_" + y) || 0; }
 /* Patrimonio di un anno: voci e obiettivo */
 function patFor(y) { return { anno: y, obiettivo: impNum("obiettivo_patrimonio_" + y) || 0, voci: S.patRows.filter(v => +v.anno === +y) }; }
 
@@ -120,13 +138,14 @@ function isTassata(id) { return tassate().includes(id); }
    come sceglie Denis in Altro, Smistamento (impostazione "ripartizione_non_tassate", es. "risparmi:20,spese:10").
    Se non è indicata, va tutta sul conto "conto_entrate_non_tassate" (o sul primo conto di risparmio). */
 function contoNonTassate() { const id = S.imp.conto_entrate_non_tassate; const a = S.acc.find(x => x.id === id && !x.tasse); return a || S.acc.find(x => !x.tasse && !x.spesa) || S.acc.find(x => !x.tasse); }
-function ripNonTassate() {
+function ripNonTassate(tpPct) {
   const r = {}; const s = S.imp.ripartizione_non_tassate;
   if (s != null && s !== "") { s.split(",").forEach(p => { const [id, v] = p.split(":"); const n = parseNum(v); if (id && n > 0) r[id.trim()] = n; }); return r; }
-  const t = taxAcc(), d = contoNonTassate(); if (t && d) r[d.id] = +t.p || 0; return r;
+  const t = taxAcc(), d = contoNonTassate(); if (t && d) r[d.id] = tpPct != null ? tpPct : (+t.p || 0); return r;
 }
-function pctNonTassate(a) { if (a.tasse) return 0; return (+a.p || 0) + (ripNonTassate()[a.id] || 0); }
-function emptyAgg() { return { cat: {}, catS: {}, nec: 0, ext: 0, nc: 0, inv: 0, tax: 0, cre: 0, ent: 0, stip: 0, entExtra: 0, entTax: 0, entExtraTax: 0, straord: 0, spese: 0, n: 0, ncCount: 0, movs: [] }; }
+/* a = conto (con le percentuali del mese); tpPct = percentuale del conto imposte in quel mese */
+function pctNonTassate(a, tpPct) { if (a.tasse) return 0; return (+a.p || 0) + (ripNonTassate(tpPct)[a.id] || 0); }
+function emptyAgg() { return { cat: {}, catS: {}, nec: 0, ext: 0, nc: 0, inv: 0, tax: 0, cre: 0, ent: 0, stip: 0, entExtra: 0, entTax: 0, entExtraTax: 0, taxAcc: 0, straord: 0, spese: 0, n: 0, ncCount: 0, movs: [] }; }
 function monthAgg(y, mo) {
   const k = "m" + y + "-" + mo; if (CACHE[k]) return CACHE[k];
   const pre = y + "-" + pad(mo);
@@ -151,6 +170,8 @@ function monthAgg(y, mo) {
     }
   }
   A.spese = A.nec + A.ext + A.nc;
+  A.y = y; A.mo = mo;
+  A.taxAcc = A.entTax * taxP(y, mo); // imposte accantonate sulle entrate tassate del mese (per risultato e tabelle)
   CACHE[k] = A; return A;
 }
 function catAmt(A, c, inclS) { return (A.cat[c] || 0) + (inclS ? (A.catS[c] || 0) : 0); }
@@ -161,7 +182,7 @@ function yearAgg(y) {
     const A = monthAgg(y, m); Y.months.push(A);
     for (const c in A.cat) Y.cat[c] = (Y.cat[c] || 0) + A.cat[c];
     for (const c in A.catS) Y.catS[c] = (Y.catS[c] || 0) + A.catS[c];
-    ["nec", "ext", "nc", "inv", "tax", "ent", "stip", "entExtra", "entTax", "entExtraTax", "straord", "spese", "cre", "n", "ncCount"].forEach(f => Y[f] += A[f]);
+    ["nec", "ext", "nc", "inv", "tax", "ent", "stip", "entExtra", "entTax", "entExtraTax", "taxAcc", "straord", "spese", "cre", "n", "ncCount"].forEach(f => Y[f] += A[f]);
   }
   Y.nMesi = Y.months.filter(a => a.n > 0).length || 1;
   CACHE[k] = Y; return Y;
@@ -171,24 +192,27 @@ function yearAgg(y) {
 function firstYear() { return Math.min.apply(null, years()); }
 function budgetYear(y) {
   const k = "b" + y; if (CACHE[k]) return CACHE[k];
-  const sp = spendAcc(); const p = (sp ? +sp.p : 0) / 100, fix = sp ? +sp.fix || 0 : 0; const tp = taxP();
-  let rip = y <= firstYear() ? ripIni() : (budgetYear(y - 1)[11] ? budgetYear(y - 1)[11].saldo : 0);
+  let rip = ripAnno(y); // ogni anno riparte dal suo bilancio di partenza (di solito 0)
   const now = new Date(); const res = [];
   for (let mo = 1; mo <= 12; mo++) {
     const fut = y > now.getFullYear() || (y === now.getFullYear() && mo > now.getMonth() + 1);
     if (fut) { res.push(null); continue; }
     const A = monthAgg(y, mo);
+    // Percentuali in vigore in questo mese (standard o personalizzate)
+    const L = contiDelMese(y, mo); const sp = L.find(a => a.spesa) || L[0]; const ta = L.find(a => a.tasse);
+    const p = (sp ? +sp.p : 0) / 100, fix = sp ? +sp.fix || 0 : 0; const tpPct = ta ? +ta.p || 0 : 30; const tp = tpPct / 100;
     const prev = mo > 1 ? monthAgg(y, mo - 1) : (y - 1 >= firstYear() ? monthAgg(y - 1, 12) : { entExtra: 0, entExtraTax: 0 });
     const base = A.stip > 0 ? A.stip * p + fix : 0;
     // Entrate extra del mese prima: le tassate con la percentuale normale, le non tassate con quella "senza imposte"
-    const pNT = sp ? pctNonTassate(sp) / 100 : 0;
+    const pNT = sp ? pctNonTassate(sp, tpPct) / 100 : 0;
     const qExtra = prev.entExtraTax * p + (prev.entExtra - prev.entExtraTax) * pNT;
     const mese = base + qExtra;
     const disp = mese + rip;
     const saldo = disp - A.spese;
     // Imposte da accantonare: solo sulle entrate tassate (stipendio del mese + extra tassati del mese prima)
     const accTax = (isTassata("stip") ? A.stip : 0) * tp + prev.entExtraTax * tp;
-    res.push({ mo, base, qExtra, mese, rip, disp, spese: A.spese, saldo, extraPrev: prev.entExtra, accTax, versTax: A.tax });
+    // avanzo = quanto resta sul conto spese a fine mese (quota del mese meno spese del mese): va spostato sul conto degli avanzi
+    res.push({ mo, base, qExtra, mese, rip, disp, spese: A.spese, saldo, avanzo: mese - A.spese, personalizzato: smistPersonalizzato(y, mo), extraPrev: prev.entExtra, accTax, versTax: A.tax });
     rip = saldo;
   }
   CACHE[k] = res; return res;
@@ -316,7 +340,7 @@ function kmDue() { if (!cat("carb")) return false; const km = S.km.slice().sort(
 /* ===== Risultato, imposte, quote dell'anno, patrimonio ===== */
 function resultOf(A) {
   const lordo = LORDO(), tp = taxP();
-  return A.ent - A.entTax * tp - A.spese - (UI.tS ? A.straord : 0) - (UI.tI ? A.inv : 0);
+  return A.ent - A.taxAcc - A.spese - (UI.tS ? A.straord : 0) - (UI.tI ? A.inv : 0);
 }
 function taxFund(y) {
   const B = budgetYear(y); let acc = 0, vers = 0; const rows = [];
@@ -341,7 +365,7 @@ function patTot(fld, voci) {
 function patStima(y) {
   const P = patFor(y); const I = patTot("ini", P.voci); const hasFin = P.voci.some(v => v.fin != null && v.fin !== ""); const F = patTot("fin", P.voci);
   const Y = yearAgg(y); const tp = taxP();
-  const tasseStim = Y.entTax * tp;
+  const tasseStim = Y.taxAcc;
   const spCons = Y.spese + Y.straord;
   const stima = I.net + Y.ent - spCons - tasseStim;
   const att = hasFin ? F.net : stima;
