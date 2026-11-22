@@ -1,0 +1,26 @@
+{
+  "name": "Le mie spese",
+  "short_name": "Le mie spese",
+  "description": "Inserimento rapido delle spese, budget del mese e analisi dell'anno.",
+  "lang": "it",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f2f5f2",
+  "theme_color": "#0b7350",
+  "icons": [
+    { "src": "icons/icona-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icona-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icona-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nuova spesa",
+      "short_name": "Nuova spesa",
+      "description": "Apre subito il modulo per inserire una spesa",
+      "url": "./index.html#nuova",
+      "icons": [{ "src": "icons/nuova-spesa-96.png", "sizes": "96x96", "type": "image/png" }]
+    }
+  ]
+}

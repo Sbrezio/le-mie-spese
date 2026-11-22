@@ -1,0 +1,11 @@
+# File con dati personali: restano solo sul computer di Denis, MAI su GitHub
+prototipo-app-spese.html
+ISTRUZIONI_APP_SPESE.md
+*.xlsx
+*.csv
+
+# Impostazioni locali di Claude Code e file di sistema
+.claude/
+node_modules/
+Thumbs.db
+desktop.ini

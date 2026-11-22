@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Le mie spese</title>
+<meta name="description" content="Le spese di Denis: inserimento rapido, budget del mese, analisi dell'anno.">
+<meta name="theme-color" content="#0b7350">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icona-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/icona-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><h1 id="ttl">Le mie spese</h1><button type="button" class="sync" id="sync"><i></i><span>Caricamento...</span></button></div>
+  <button type="button" id="update" class="banner updbar" hidden>Nuova versione disponibile: tocca per aggiornare</button>
+  <main id="view" class="stack"></main>
+</div>
+<nav class="nav" id="nav" hidden>
+  <button data-tab="ins" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>Inserisci</button>
+  <button data-tab="mov"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>Movimenti</button>
+  <button data-tab="mese"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>Mese</button>
+  <button data-tab="anno"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 20V10M10 20V4M15 20v-7M20 20v-11"/></svg>Anno</button>
+  <button data-tab="altro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18" cy="12" r="1.5"/></svg>Altro</button>
+</nav>
+<div id="modal"></div>
+<!-- Chart.js 4.4.1 copiato nel progetto: l'app funziona anche senza rete -->
+<script src="lib/chart.umd.min.js"></script>
+<script src="js/calcoli.js"></script>
+<script src="js/dati.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
