@@ -298,9 +298,6 @@ function viewMese() {
   return `
   ${monthPicker()}
   <section class="card">${budget}</section>
-  ${B ? `<section class="card"><h2>Con il saldo dei mesi precedenti ${legBtn(`Il bilancio di fine mese passa al mese dopo: se è positivo si somma, se è negativo si scala.`)}</h2>
-    <div class="kv"><span>Quota spese mese ${MESI[mo - 1]}</span><b>${eur(B.mese)}</b><span>Bilancio mesi precedenti</span><b class="${sgn(B.rip)}">${eur(B.rip)}</b><span>Bilancio compreso mese corrente</span><b class="${sgn(B.disp)}">${eur(B.disp)}</b><span>Spese ${MESI[mo - 1]}</span><b>${eur(B.spese)}</b><span>Bilancio fine mese</span><b class="${sgn(B.saldo)}">${eur(B.saldo)}</b></div>
-    </section>` : ""}
   ${B ? avanzoHTML(y, mo, B) : ""}
   <label class="chk card" style="flex-direction:row" for="inclS"><input type="checkbox" id="inclS" data-act="inclS" ${inclS ? "checked" : ""}>Includi le spese straordinarie in obiettivi e grafici${A.straord ? ` (questo mese ${eur(A.straord)})` : ""}</label>
   <section class="card"><h2>Dove sono finiti i soldi e obiettivi ${legBtn(`Barra = quanto hai speso nel mese e quota sul totale delle spese. A destra = quanto hai usato dell'obiettivo mensile, con i colori verde, giallo, arancione, rosso e nero${tick != null ? "; la linea indica il punto del mese" : ""}. Tocca una categoria per vedere le spese.`)}</h2>
@@ -502,8 +499,8 @@ function viewAnno() {
     </section>
   <section class="card"><h2>Budget mese per mese ${legBtn(`La barra confronta le spese necessarie, extra e senza categoria dell'anno con la somma delle quote di stipendio ed entrate extra destinate alle spese di ogni mese (senza riporto iniziale). La linea indica dove dovresti essere oggi. Colori: verde sotto il ritmo, giallo in linea, arancione al limite, rosso sopra, nero oltre il 120% del ritmo.`)}</h2>
     ${yearQuotaHTML(y, false)}
-    <div class="tblwrap"><table><thead><tr><th>Mese</th><th class="n">Quota spese del mese</th><th class="n">Bilancio mesi precedenti</th><th class="n">Bilancio compreso mese corrente</th><th class="n">Spese del mese</th><th class="n">Bilancio fine mese</th><th class="n">Avanzo del mese</th><th class="n">${esc(nomeAvanzi())} prevista</th></tr></thead><tbody>
-    ${B.map((b, i) => b ? `<tr><td>${MESI[i]}</td><td class="n">${eur(b.mese)}</td><td class="n ${sgn(b.rip)}">${eur(b.rip)}</td><td class="n ${sgn(b.disp)}">${eur(b.disp)}</td><td class="n">${eur(b.spese)}</td><td class="n ${sgn(b.saldo)}">${eur(b.saldo)}</td><td class="n ${sgn(b.avanzo)}">${eur(b.avanzo)}</td><td class="n ${sgn(b.prep)}">${eur(b.prep)}</td></tr>` : "").join("")}
+    <div class="tblwrap"><table><thead><tr><th>Mese</th><th class="n">Quota spese del mese</th><th class="n">Bilancio mesi precedenti</th><th class="n">Bilancio compreso mese corrente</th><th class="n">Spese del mese</th><th class="n">Bilancio fine mese<br><span class="tiny">(− = preso in prestito)</span></th><th class="n">${esc(nomeAvanzi())} prevista</th></tr></thead><tbody>
+    ${B.map((b, i) => b ? `<tr><td>${MESI[i]}</td><td class="n">${eur(b.mese)}</td><td class="n ${sgn(b.rip)}">${eur(b.rip)}</td><td class="n ${sgn(b.disp)}">${eur(b.disp)}</td><td class="n">${eur(b.spese)}</td><td class="n ${sgn(b.saldo)}">${eur(b.saldo)}</td><td class="n ${sgn(b.prep)}">${eur(b.prep)}</td></tr>` : "").join("")}
   </tbody></table></div></section>
   ${lordo ? `<section class="card"><div class="row between"><h2>Imposte e contributi</h2><button class="ghost" data-act="sub2" data-v="tax">Dettaglio</button></div>
     <div class="kv"><span>Già accantonato a inizio anno</span><b>${eur0(taxIni(y))}</b><span>Accantonato nell'anno</span><b>${eur0(fondo.acc)}</b><span>Versato nell'anno</span><b>${eur0(fondo.vers)}</b><span>Fondo imposte oggi</span><b>${eur0(fondo.saldo)}</b></div></section>` : ""}
@@ -642,13 +639,17 @@ function subSmist() {
 /* ===== Avanzo del conto spese a fine mese ===== */
 function avanzoHTML(y, mo, B) {
   const now = new Date(); const inCorso = y === now.getFullYear() && mo === now.getMonth() + 1; const nome = esc(nomeAvanzi());
-  return `<section class="card"><h2>Fine mese: avanzo del conto spese ${legBtn(`Ogni fine mese quello che resta sul conto spese (quota del mese meno spese del mese) va spostato su ${nome}, così il conto spese riparte da zero. Restano comunque soldi per le spese: il bilancio passa al mese dopo. Se hai speso più della quota, la differenza la prendi da ${nome}. Il saldo previsto parte da quello di inizio anno (Altro, Smistamento) e somma gli avanzi di ogni mese, togliendo gli sforamenti: confrontalo con il saldo vero della carta.`)}</h2>
+  const riga = (l, v, cls, forte) => `<span>${forte ? "<b>" + l + "</b>" : l}</span><b class="${cls || ""}">${eur(v)}</b>`;
+  return `<section class="card"><h2>Conto spese e ${nome} ${legBtn(`La quota spese del mese serve prima a reintegrare ${nome} di quello che avevi preso in prestito nei mesi prima (o si aggiunge a quello che ti era avanzato). Quello che resta è quanto puoi spendere. Se spendi di più, la differenza la prendi in prestito da ${nome} e la reintegri con la quota del mese dopo. Il saldo previsto parte da quello di inizio anno (Altro, Smistamento): confrontalo con il saldo vero della carta.`)}</h2>
     <div class="kv">
-      <span>${inCorso ? "Rimasto finora" : "Rimasto"} sul conto spese (quota − spese del mese)</span><b class="${sgn(B.avanzo)}">${eur(B.avanzo)}</b>
-      <span><b>${B.avanzo >= 0 ? "Da spostare su " + nome : "Da prendere da " + nome + " per coprire"}</b></span><b>${eur(Math.abs(B.avanzo))}</b>
-      <span>Saldo previsto su ${nome} ${inCorso ? "oggi" : "a fine mese"} (dopo lo spostamento)</span><b class="${sgn(B.prep)}">${eur(B.prep)}</b>
+      ${riga("Quota spese di " + MESI[mo - 1], B.mese)}
+      ${B.rip < 0 ? riga("Reintegro di " + nome + " (prestito dei mesi prima)", B.rip, "neg") : B.rip > 0 ? riga("Avanzato nei mesi prima (su " + nome + ")", B.rip, "pos") : ""}
+      ${riga("Potevi spendere", B.disp, sgn(B.disp), true)}
+      ${riga("Spese di " + MESI[mo - 1] + (inCorso ? " finora" : ""), B.spese)}
+      ${B.saldo < 0 ? riga("Preso in prestito da " + nome + " (da reintegrare il mese dopo)", -B.saldo, "neg", true) : riga("Avanzato (resta su " + nome + " per i mesi dopo)", B.saldo, "pos", true)}
+      ${riga(nome + " prevista " + (inCorso ? "oggi" : "a fine mese"), B.prep, sgn(B.prep))}
     </div>
-    ${inCorso ? `<div class="small muted">Mese in corso: il numero definitivo lo vedi a fine mese.</div>` : ""}
+    ${inCorso ? `<div class="small muted">Mese in corso: i numeri definitivi li vedi a fine mese.</div>` : ""}
   </section>`;
 }
 
