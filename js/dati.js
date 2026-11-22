@@ -5,7 +5,7 @@
      che parte subito, oppure appena torna la connessione. */
 "use strict";
 
-const VERSIONE_APP = "9"; // uguale al numero di VERSIONE in sw.js
+const VERSIONE_APP = "10"; // uguale al numero di VERSIONE in sw.js
 const K_CFG = "spese-collegamento", K_DATI = "spese-dati", K_CODA = "spese-coda";
 
 let SNAP = null;      // ultima copia nota del foglio (più le modifiche già in coda), per trovare le differenze

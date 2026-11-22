@@ -560,10 +560,10 @@ function openCatDetail(c, y, mo, onlyS) {
 function viewAltro() {
   const s = UI.altro;
   if (!s) return annoHTML() + `<div class="menu">
-    ${[["obj", "Obiettivi di spesa", "Tetto mensile per categoria"], ["smist", "Smistamento", "Percentuali sui conti"], ["ric", "Spese ricorrenti", "Abbonamenti, assicurazioni"], ["tax", "Imposte e contributi", "Accantonamenti e versamenti"], ["pat", "Patrimonio", "Inizio e fine anno, indici"], ["cred", "Crediti e debiti", "Chi ti deve e chi devi"], ["carb", "Carburante", "Prezzo al litro, km al litro"], ["cat", "Categorie", "Aggiungi, rinomina, colori"], ["dati", "Impostazioni e dati", "Lordo o netto, collegamento"]].map(x => `<button data-act="sub" data-v="${x[0]}"><b>${x[1]}</b><span>${x[2]}</span></button>`).join("")}
+    ${[["obj", "Obiettivi di spesa", "Tetto mensile per categoria"], ["smist", "Smistamento", "Percentuali sui conti"], ["ric", "Spese ricorrenti", "Abbonamenti, assicurazioni"], ["tax", "Imposte e contributi", "Accantonamenti e versamenti"], ["pat", "Patrimonio", "Inizio e fine anno, indici"], ["cred", "Crediti e debiti", "Chi ti deve e chi devi"], ["carb", "Carburante", "Prezzo al litro, km al litro"], ["cat", "Categorie", "Aggiungi, rinomina, colori"], ["dati", "Impostazioni e dati", "Lordo o netto, collegamento"], ["note", "Note", noteLista().filter(n => !n.fatta).length ? noteLista().filter(n => !n.fatta).length + " da fare · appunti e modifiche" : "Appunti e modifiche da chiedere"]].map(x => `<button data-act="sub" data-v="${x[0]}"><b>${x[1]}</b><span>${x[2]}</span></button>`).join("")}
   </div><div class="tiny muted" style="text-align:center">Versione dell&#39;app: ${VERSIONE_APP}</div>`;
   const back = `<button class="ghost" data-act="sub" data-v="" style="align-self:flex-start">‹ Altro</button>`;
-  return back + ({ obj: subObj, smist: subSmist, ric: subRic, tax: subTax, pat: subPat, cred: subCred, carb: subCarb, cat: subCat, dati: subDati }[s])();
+  return back + ({ obj: subObj, smist: subSmist, ric: subRic, tax: subTax, pat: subPat, cred: subCred, carb: subCarb, cat: subCat, dati: subDati, note: subNote }[s])();
 }
 /* Mesi chiusi usati per la media: quelli dell'anno in corso; a gennaio quelli dell'anno prima */
 function avgMonths() {
@@ -634,6 +634,43 @@ function subSmist() {
       <div class="row between"><b class="${Math.abs(tot - tp) < 0.001 ? "pos" : "neg"}">Quota imposte ripartita: ${String(r2(tot)).replace(".", ",")}% su ${tp}%</b></div>
       ${Math.abs(tot - tp) < 0.001 ? "" : `<div class="banner warn">La quota ripartita deve essere ${tp}%: ${tot < tp ? "mancano " + String(r2(tp - tot)).replace(".", ",") + " punti, che restano non assegnati" : "hai assegnato " + String(r2(tot - tp)).replace(".", ",") + " punti in più"}.</div>`}`; })()}
   </section>`;
+}
+
+/* ===== Note: appunti e modifiche da chiedere =====
+   Salvate nel Google Foglio (scheda Impostazioni, chiave note_app) come elenco: { id, tipo: "mod" | "app", testo, data, fatta } */
+function noteLista() { try { const L = JSON.parse(S.imp.note_app || "[]"); return Array.isArray(L) ? L : []; } catch (e) { return []; } }
+function salvaNote(L) { S.imp.note_app = L.length ? JSON.stringify(L) : ""; persist(); const sy = window.scrollY; render(); window.scrollTo(0, sy); }
+function subNote() {
+  const L = noteLista(); const tipo = UI.noteTipo || "mod";
+  const aperte = L.filter(n => !n.fatta).sort((a, b) => a.data < b.data ? 1 : -1), fatte = L.filter(n => n.fatta).sort((a, b) => a.data < b.data ? 1 : -1);
+  const nMod = aperte.filter(n => n.tipo === "mod").length;
+  const li = n => `<div class="item" style="cursor:default;grid-template-columns:1fr">
+      <div class="m">${n.tipo === "mod" ? '<span class="badge warn">modifica da chiedere</span>' : '<span class="badge">appunto</span>'} ${fmtShort(n.data)}${n.fatta && n.fattaIl ? " · fatta il " + fmtShort(n.fattaIl) : ""}</div>
+      <div class="notatesto${n.fatta ? " muted" : ""}">${esc(n.testo)}</div>
+      <div class="row" style="gap:4px"><button class="ghost" data-act="notefatta" data-id="${n.id}">${n.fatta ? "Riapri" : n.tipo === "mod" ? "Segna come fatta" : "Archivia"}</button><button class="ghost" data-act="noteedit" data-id="${n.id}">Modifica</button><button class="ghost danger" data-act="notedel" data-id="${n.id}">Elimina</button></div>
+    </div>`;
+  return `<section class="card"><h2>Nuova nota</h2>
+    <div class="seg"><button type="button" data-act="notetipo" data-v="mod" class="${tipo === "mod" ? "on" : ""}">Modifica da chiedere</button><button type="button" data-act="notetipo" data-v="app" class="${tipo === "app" ? "on" : ""}">Appunto</button></div>
+    <label for="noteNew">${tipo === "mod" ? "Cosa vorresti cambiare nell'app (con un esempio, se puoi)" : "Appunto"}<textarea id="noteNew" rows="4" placeholder="${tipo === "mod" ? "es. nella schermata Mese vorrei vedere anche..." : "scrivi qui"}"></textarea></label>
+    <div id="noteErr" class="small neg"></div>
+    <button class="pri" data-act="noteadd">Salva nota</button></section>
+  <section class="card"><div class="row between"><h2>Da fare (${aperte.length})</h2>${nMod ? `<button class="ghost" data-act="notecopia">Copia le modifiche da chiedere</button>` : ""}</div>
+    ${nMod ? `<div class="small muted">"Copia le modifiche da chiedere" copia tutte le modifiche aperte in un unico testo, pronto da incollare a Claude.</div>` : ""}
+    <div class="list">${aperte.map(li).join("") || '<div class="muted small">Nessuna nota aperta.</div>'}</div></section>
+  ${fatte.length ? `<section class="card"><details><summary>Fatte e archiviate (${fatte.length})</summary><div class="list">${fatte.map(li).join("")}</div></details></section>` : ""}`;
+}
+function openNota(id) {
+  const L = noteLista(); const n = L.find(x => x.id === id); if (!n) return;
+  modal(`<div class="row between"><h2>Modifica nota</h2><button class="ghost" data-x="1">Chiudi</button></div>
+    <div class="seg"><button type="button" id="ntMod" class="${n.tipo === "mod" ? "on" : ""}">Modifica da chiedere</button><button type="button" id="ntApp" class="${n.tipo === "app" ? "on" : ""}">Appunto</button></div>
+    <textarea id="ntTesto" rows="6">${esc(n.testo)}</textarea>
+    <button class="pri wide" id="ntSave">Salva</button>`, sh => {
+    let tipo = n.tipo;
+    const segna = () => { sh.querySelector("#ntMod").classList.toggle("on", tipo === "mod"); sh.querySelector("#ntApp").classList.toggle("on", tipo === "app"); };
+    sh.querySelector("#ntMod").addEventListener("click", () => { tipo = "mod"; segna(); });
+    sh.querySelector("#ntApp").addEventListener("click", () => { tipo = "app"; segna(); });
+    sh.querySelector("#ntSave").addEventListener("click", () => { const tx = sh.querySelector("#ntTesto").value.trim(); if (!tx) return; n.testo = tx; n.tipo = tipo; closeModal(); salvaNote(L); toast("Nota salvata"); });
+  });
 }
 
 /* ===== Avanzo del conto spese a fine mese ===== */
@@ -909,6 +946,19 @@ document.getElementById("view").addEventListener("click", e => {
   else if (a === "gonc") { UI.f = { mo: "", c: "__nc", q: "" }; UI.y = years()[years().length - 1]; go("mov"); }
   else if (a === "annolordo") { S.imp.mostra_lordo = b.dataset.v; persist(); const sy = window.scrollY; render(); window.scrollTo(0, sy); }
   else if (a === "creaanno") creaAnno();
+  else if (a === "notetipo") { UI.noteTipo = b.dataset.v; const tx = document.getElementById("noteNew").value; render(); document.getElementById("noteNew").value = tx; }
+  else if (a === "noteadd") {
+    const tx = document.getElementById("noteNew").value.trim(); if (!tx) { document.getElementById("noteErr").textContent = "Scrivi il testo della nota."; return; }
+    const L = noteLista(); L.push({ id: uid(), tipo: UI.noteTipo || "mod", testo: tx, data: todayISO(), fatta: false }); salvaNote(L); toast("Nota salvata");
+  }
+  else if (a === "notefatta") { const L = noteLista(); const n = L.find(x => x.id === b.dataset.id); if (n) { n.fatta = !n.fatta; n.fattaIl = n.fatta ? todayISO() : ""; salvaNote(L); } }
+  else if (a === "noteedit") openNota(b.dataset.id);
+  else if (a === "notedel") confirmBox("Elimino questa nota?", "Elimina", () => salvaNote(noteLista().filter(x => x.id !== b.dataset.id)));
+  else if (a === "notecopia") {
+    const M = noteLista().filter(n => !n.fatta && n.tipo === "mod").sort((x, y) => x.data < y.data ? -1 : 1);
+    const txt = "Modifiche da fare all'app \"Le mie spese\":\n\n" + M.map((n, i) => (i + 1) + ". " + n.testo + " (" + fmtShort(n.data) + ")").join("\n\n");
+    navigator.clipboard.writeText(txt).then(() => toast("Copiate " + M.length + " modifiche: incollale a Claude"), () => toast("Copia non riuscita in questo browser"));
+  }
   else if (a === "smistmese") openSmistMese(+b.dataset.y, +b.dataset.mo);
   else if (a === "godv") { UI.f = { mo: "", c: "__dv", q: "" }; go("mov"); }
   else if (a === "retry") { invia(true); }

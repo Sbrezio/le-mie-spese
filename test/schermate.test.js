@@ -48,7 +48,7 @@ console.log("Apro tutte le schermate");
 const anni = [2026, 2025, 2027];
 for (const y of anni) {
   for (const t of ["ins", "mov", "mese", "anno"]) prova(`${t} ${y}`, `UI.y = ${y}; UI.mo = 3; go("${t}")`);
-  for (const s of ["", "obj", "smist", "ric", "tax", "pat", "cred", "carb", "cat", "dati"]) prova(`altro ${s || "menu"} ${y}`, `UI.y = ${y}; go("altro", "${s}" || null)`);
+  for (const s of ["", "obj", "smist", "ric", "tax", "pat", "cred", "carb", "cat", "dati", "note"]) prova(`altro ${s || "menu"} ${y}`, `UI.y = ${y}; go("altro", "${s}" || null)`);
   for (let mo = 1; mo <= 12; mo++) prova(`mese ${mo}/${y}`, `UI.y = ${y}; UI.mo = ${mo}; go("mese")`);
 }
 // Lordo e netto, straordinarie e investimenti
@@ -57,6 +57,8 @@ for (const l of ["SI", "NO"]) for (const tS of [true, false]) for (const tI of [
 prova("finestra modifica movimento", `go("ins"); openEdit(S.movs[10].id)`, "modal");
 prova("finestra dettaglio categoria", `openCatDetail("risto", 2026, 3)`, "modal");
 prova("finestra percentuali del mese", `openSmistMese(2026, 3)`, "modal");
+prova("note con elementi", `S.imp.note_app = JSON.stringify([{ id: "a", tipo: "mod", testo: "prova <b>", data: "2026-11-20", fatta: false }, { id: "b", tipo: "app", testo: "x", data: "2026-11-21", fatta: true, fattaIl: "2026-11-22" }]); go("altro", "note")`);
+prova("finestra modifica nota", `openNota("a")`, "modal");
 prova("primo avvio (collega)", `localStorage.removeItem("spese-collegamento"); render()`);
 
 console.log(falliti ? `FALLITE ${falliti} schermate su ${falliti + riusciti}` : `TUTTE LE ${riusciti} SCHERMATE SI APRONO`);
