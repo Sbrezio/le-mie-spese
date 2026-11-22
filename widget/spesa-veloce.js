@@ -1,10 +1,10 @@
 // Widget "Spesa veloce" per l'app Android HTTP Shortcuts (scorciatoia di tipo "Scripting").
 // Chiede importo, descrizione e categoria e manda la spesa al ponte Google Apps Script.
 // Indirizzo e chiave NON sono scritti qui: stanno in due variabili di HTTP Shortcuts
-// chiamate ponte_url e ponte_chiave (vedi widget/ISTRUZIONI.md).
+// chiamate spese_ponte_url e spese_ponte_chiave (vedi widget/ISTRUZIONI.md).
 
-const url = getVariable("ponte_url").trim();
-const chiave = getVariable("ponte_chiave").trim();
+const url = getVariable("spese_ponte_url").trim();
+const chiave = getVariable("spese_ponte_chiave").trim();
 
 function ponte(azione, dati) {
   const r = sendHttpRequest(url, {

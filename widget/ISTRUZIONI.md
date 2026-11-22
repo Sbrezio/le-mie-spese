@@ -9,9 +9,9 @@ Senza rete il widget avvisa e **non** salva: in quel caso usa la scorciatoia "Nu
 ## Configurazione (una volta sola)
 1. Installa **HTTP Shortcuts** dal Play Store.
 2. Crea due variabili di tipo **Valore statico / Static variable**:
-   - `ponte_url` = indirizzo dell'App web del ponte (finisce con `/exec`)
-   - `ponte_chiave` = chiave segreta
+   - `spese_ponte_url` = indirizzo dell'App web del ponte (finisce con `/exec`)
+   - `spese_ponte_chiave` = chiave segreta
 3. Crea una scorciatoia di tipo **Scripting** chiamata "Spesa veloce" e incolla nel codice il contenuto di `spesa-veloce.js`.
 4. Metti la scorciatoia sulla schermata del telefono come widget.
 
-Il file `spesa-veloce.js` non contiene indirizzi né chiavi. Se cambi la chiave del ponte, aggiorna solo la variabile `ponte_chiave`.
+Il file `spesa-veloce.js` non contiene indirizzi né chiavi. Se cambi la chiave del ponte, aggiorna solo la variabile `spese_ponte_chiave`.
